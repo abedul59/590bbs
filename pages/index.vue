@@ -33,6 +33,10 @@
         </div>
 
         <div class="flex-1">
+          <div class="text-xs text-gray-400 mb-2 flex items-center gap-1 font-mono">
+            🕒 {{ formatDate(item.created_at) }}
+          </div>
+          
           <h5 :class="['text-xl font-bold tracking-tight transition-colors duration-300 mb-2 pr-10', item.is_important ? 'text-red-700' : 'text-gray-900', themeObj.hoverText]">
             {{ item.title }}
           </h5>
@@ -68,26 +72,50 @@ import { ref, computed } from 'vue'
 import { themeConfig } from '@/utils/theme'
 
 const supabase = useSupabaseClient()
+const dayjs = useDayjs()
 const currentTheme = useState('currentTheme')
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
 
 const activeCategory = ref('資訊科技')
 
+// 取得網站全域設定 (包含排序方式)
+const { data: settings } = await useAsyncData('site_settings', async () => {
+  const { data } = await supabase.from('site_settings').select('*').eq('id', 1).single()
+  return data
+})
+const sortOrder = computed(() => settings.value?.sort_order || 'newest')
+
+// 取得公告資料
 const { data: bulletins } = await useAsyncData('bulletins', async () => {
-  const { data } = await supabase.from('bulletins').select('*').order('created_at', { ascending: false })
+  const { data } = await supabase.from('bulletins').select('*')
   return data
 })
 
-// 過濾與排序邏輯 (置頂優先，再來依建立時間)
+// 時間格式化
+const formatDate = (dateString) => {
+  return dayjs(dateString).format('YYYY/MM/DD HH:mm')
+}
+
+// 過濾與動態排序邏輯
 const filteredBulletins = computed(() => {
   if (!bulletins.value) return []
   let filtered = bulletins.value.filter(b => b.category === activeCategory.value)
   
   return filtered.sort((a, b) => {
+    // 📌 規則 1: 置頂永遠最優先
     if (a.is_pinned !== b.is_pinned) {
-      return a.is_pinned ? -1 : 1 // 讓 true 排在前面
+      return a.is_pinned ? -1 : 1 
     }
-    return new Date(b.created_at) - new Date(a.created_at)
+    
+    // 🕒 規則 2: 依照後台設定的時間排序
+    const dateA = new Date(a.created_at).getTime()
+    const dateB = new Date(b.created_at).getTime()
+    
+    if (sortOrder.value === 'oldest') {
+      return dateA - dateB // 最舊在前
+    } else {
+      return dateB - dateA // 最新在前 (預設)
+    }
   })
 })
 </script>

@@ -34,10 +34,17 @@
               <label class="block text-sm text-gray-600 mb-1">網站名稱</label>
               <input v-model="siteTitle" type="text" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
             </div>
-            <div class="md:w-1/3">
+            <div class="md:w-1/4">
               <label class="block text-sm text-gray-600 mb-1">網站風格主題</label>
               <select v-model="siteTheme" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent bg-white', themeObj.ring]">
                 <option v-for="(config, key) in themeConfig" :key="key" :value="key">{{ config.label }}</option>
+              </select>
+            </div>
+            <div class="md:w-1/4">
+              <label class="block text-sm text-gray-600 mb-1">前台公告排序方式</label>
+              <select v-model="siteSortOrder" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent bg-white', themeObj.ring]">
+                <option value="newest">🕒 最新公告在前</option>
+                <option value="oldest">🕰️ 最舊公告在前</option>
               </select>
             </div>
           </div>
@@ -47,6 +54,38 @@
           </div>
           <button @click="updateSettings" :class="[themeObj.bg, themeObj.hover, 'text-white px-6 py-2 rounded font-medium transition duration-300 shadow-sm']">儲存全域設定</button>
         </div>
+      </section>
+
+      <section class="border-b pb-6">
+        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">📝 管理員暫存清單 <span class="text-xs text-gray-400 font-normal border px-2 py-1 rounded">僅限後台可見</span></h3>
+        
+        <div class="flex flex-col md:flex-row gap-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+          <input v-model="newTodo.content" type="text" placeholder="輸入備忘、草稿或代辦事項..." :class="['border border-gray-300 p-2 flex-[2] rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
+          <input v-model="newTodo.url" type="url" placeholder="附加網址 (選填)" :class="['border border-gray-300 p-2 flex-1 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
+          <input v-model="newTodo.due_date" type="datetime-local" title="指定日期時間 (選填)" :class="['border border-gray-300 p-2 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent text-gray-600', themeObj.ring]">
+          <button @click="addTodo" class="bg-gray-800 text-white px-5 py-2 rounded hover:bg-gray-900 text-sm font-medium whitespace-nowrap transition-colors">新增紀錄</button>
+        </div>
+
+        <ul class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+          <li v-for="todo in todosList" :key="todo.id" :class="['flex justify-between items-center p-3 rounded-lg border transition-all duration-200', todo.is_completed ? 'bg-gray-100 border-gray-200 opacity-60' : 'bg-white border-gray-300 shadow-sm']">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <input type="checkbox" :checked="todo.is_completed" @change="toggleTodo(todo)" :class="['w-5 h-5 rounded cursor-pointer', themeObj.text]">
+              
+              <div class="flex flex-col">
+                <span :class="['font-medium text-gray-800 truncate', {'line-through text-gray-500': todo.is_completed}]">{{ todo.content }}</span>
+                <div class="flex gap-3 text-xs text-gray-500 mt-1">
+                  <span v-if="todo.due_date" class="bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded flex items-center gap-1">⏰ {{ formatTodoDate(todo.due_date) }}</span>
+                  <a v-if="todo.url" :href="todo.url" target="_blank" class="text-blue-500 hover:underline truncate max-w-[150px]">🔗 相關連結</a>
+                  <span class="text-gray-400">建立於: {{ formatDate(todo.created_at) }}</span>
+                </div>
+              </div>
+            </div>
+            <button @click="deleteTodo(todo.id)" class="text-gray-400 hover:text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors">✖</button>
+          </li>
+          <li v-if="todosList.length === 0" class="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            目前沒有任何待辦或暫存訊息。
+          </li>
+        </ul>
       </section>
 
       <section class="border-b pb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
@@ -90,10 +129,10 @@
           <div class="bg-white p-3 rounded border border-gray-200">
             <div class="flex justify-between items-center mb-2">
               <label class="text-sm text-gray-600 font-bold">額外相關網址 (選填)</label>
-              <button @click="addLinkToObj(newPost)" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200">+ 新增一組網址</button>
+              <button @click="addLinkToObj(newPost)" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200">+ 新增網址</button>
             </div>
             <div v-for="(link, index) in newPost.links" :key="index" class="flex gap-2 mb-2 items-center">
-              <input v-model="link.name" type="text" placeholder="按鈕名稱 (例: 講義下載)" class="border border-gray-300 p-1.5 text-sm rounded w-1/3">
+              <input v-model="link.name" type="text" placeholder="按鈕名稱" class="border border-gray-300 p-1.5 text-sm rounded w-1/3">
               <input v-model="link.url" type="url" placeholder="https://..." class="border border-gray-300 p-1.5 text-sm rounded flex-1">
               <button @click="removeLinkFromObj(newPost, index)" class="text-red-500 hover:text-red-700 font-bold px-2">✖</button>
             </div>
@@ -149,7 +188,7 @@
           <div class="bg-white p-3 rounded border border-gray-200">
             <div class="flex justify-between items-center mb-2">
               <label class="text-xs text-gray-500 font-bold">額外相關網址</label>
-              <button @click="addLinkToObj(editingPost)" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200">+ 新增一組網址</button>
+              <button @click="addLinkToObj(editingPost)" class="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded hover:bg-blue-200">+ 新增</button>
             </div>
             <div v-for="(link, index) in editingPost.links" :key="index" class="flex gap-2 mb-2 items-center">
               <input v-model="link.name" type="text" placeholder="名稱" class="border border-gray-300 p-1.5 text-sm rounded w-1/3">
@@ -173,8 +212,11 @@
                 <span :class="item.category === '資訊科技' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'" class="text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap">{{ item.category }}</span>
                 <span class="font-bold text-gray-800 text-base" :class="{'text-red-700': item.is_important}">{{ item.title }}</span>
               </div>
-              <span class="text-xs text-gray-500 mt-1 truncate max-w-xs md:max-w-md">🔗 {{ item.url }}</span>
-              <span v-if="item.links && item.links.length > 0" class="text-[10px] text-gray-400 mt-0.5">+ 包含 {{ item.links.length }} 個額外網址</span>
+              <div class="flex flex-col text-xs text-gray-500 mt-1 gap-1">
+                <span>🕒 {{ formatDate(item.created_at) }}</span>
+                <span class="truncate max-w-xs md:max-w-md">🔗 {{ item.url }}</span>
+                <span v-if="item.links && item.links.length > 0" class="text-[10px] text-gray-400">+ 包含 {{ item.links.length }} 個額外網址</span>
+              </div>
             </div>
             <div class="flex gap-2 self-end md:self-auto mt-2 md:mt-0">
               <button @click="startEdit(item)" :class="['text-sm px-3 py-1 rounded border transition-colors font-medium', themeObj.text, themeObj.bg.replace('bg-', 'border-'), themeObj.bg.replace('bg-', 'hover:bg-').replace('600', '50')]">編輯</button>
@@ -208,8 +250,8 @@
           </select>
           <input v-model="newKeepAlive.name" type="text" placeholder="網站名稱" :class="['border border-gray-300 p-2 w-full md:w-32 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
           <input v-model="newKeepAlive.url" type="url" placeholder="喚醒 API 網址 (必填)" :class="['border border-gray-300 p-2 flex-1 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
-          <input v-model="newKeepAlive.home_url" type="url" placeholder="真正首頁網址 (選填)" :class="['border border-gray-300 p-2 flex-1 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
-          <button @click="addKeepAliveUrl" :class="[themeObj.bg, themeObj.hover, 'text-white px-5 py-2 rounded text-sm font-medium whitespace-nowrap transition-colors shadow-sm']">新增</button>
+          <input v-model="newKeepAlive.home_url" type="url" placeholder="首頁網址 (選填)" :class="['border border-gray-300 p-2 flex-1 rounded text-sm focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]">
+          <button @click="addKeepAliveUrl" :class="[themeObj.bg, themeObj.hover, 'text-white px-5 py-2 rounded text-sm font-medium whitespace-nowrap shadow-sm']">新增</button>
         </div>
 
         <div class="space-y-6">
@@ -221,10 +263,10 @@
                   <span class="font-bold text-gray-800">{{ item.name }}</span>
                   <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
                     <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded truncate max-w-xs md:max-w-md">⚡ API: {{ item.url }}</span>
-                    <a v-if="item.home_url" :href="item.home_url" target="_blank" :class="['inline-flex items-center justify-center text-xs font-bold bg-opacity-10 hover:bg-opacity-20 px-3 py-1 rounded-md transition-colors w-fit', themeObj.text, themeObj.bg.replace('bg-', 'bg-').replace('600', '100')]">🔗 首頁</a>
+                    <a v-if="item.home_url" :href="item.home_url" target="_blank" :class="['inline-flex items-center justify-center text-xs font-bold bg-opacity-10 hover:bg-opacity-20 px-3 py-1 rounded-md w-fit', themeObj.text, themeObj.bg.replace('bg-', 'bg-').replace('600', '100')]">🔗 首頁</a>
                   </div>
                 </div>
-                <button @click="deleteKeepAliveUrl(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors self-end md:self-auto mt-2 md:mt-0">刪除</button>
+                <button @click="deleteKeepAliveUrl(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors self-end md:self-auto">刪除</button>
               </li>
             </ul>
           </div>
@@ -236,38 +278,13 @@
                   <span class="font-bold text-gray-800">{{ item.name }}</span>
                   <div class="flex flex-col md:flex-row md:items-center gap-2 mt-1">
                     <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded truncate max-w-xs md:max-w-md">⚡ API: {{ item.url }}</span>
-                    <a v-if="item.home_url" :href="item.home_url" target="_blank" :class="['inline-flex items-center justify-center text-xs font-bold bg-opacity-10 hover:bg-opacity-20 px-3 py-1 rounded-md transition-colors w-fit', themeObj.text, themeObj.bg.replace('bg-', 'bg-').replace('600', '100')]">🔗 首頁</a>
+                    <a v-if="item.home_url" :href="item.home_url" target="_blank" :class="['inline-flex items-center justify-center text-xs font-bold bg-opacity-10 hover:bg-opacity-20 px-3 py-1 rounded-md w-fit', themeObj.text, themeObj.bg.replace('bg-', 'bg-').replace('600', '100')]">🔗 首頁</a>
                   </div>
                 </div>
-                <button @click="deleteKeepAliveUrl(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors self-end md:self-auto mt-2 md:mt-0">刪除</button>
+                <button @click="deleteKeepAliveUrl(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors self-end md:self-auto">刪除</button>
               </li>
             </ul>
           </div>
-        </div>
-      </section>
-
-      <section>
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-xl font-semibold">本站來訪紀錄</h3>
-          <button @click="loadVisitorLogs" :class="['text-sm hover:opacity-75 underline transition-opacity', themeObj.text]">重新整理</button>
-        </div>
-        <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-          <table class="min-w-full bg-white text-sm text-left">
-            <thead class="bg-gray-100 border-b">
-              <tr>
-                <th class="p-3 font-medium text-gray-700 w-1/4">時間</th>
-                <th class="p-3 font-medium text-gray-700 w-1/4">IP 位址</th>
-                <th class="p-3 font-medium text-gray-700 w-1/2">設備 (User-Agent)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in visitorLogs" :key="log.id" class="border-b hover:bg-gray-50">
-                <td class="p-3 whitespace-nowrap text-gray-600">{{ formatDate(log.visited_at) }}</td>
-                <td :class="['p-3 font-mono', themeObj.text]">{{ log.ip_address }}</td>
-                <td class="p-3 text-gray-600 truncate max-w-xs" :title="log.user_agent">{{ log.user_agent }}</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </section>
 
@@ -293,32 +310,25 @@ const errorMsg = ref('')
 const siteTitle = ref('')
 const marqueeText = ref('')
 const siteTheme = ref('purple')
+const siteSortOrder = ref('newest') // 新增排序變數
 
-// 教學公告變數 (加入 links, is_important, is_pinned)
+// ====== 暫存/待辦清單變數 ======
+const todosList = ref([])
+const newTodo = ref({ content: '', url: '', due_date: '' })
+
 const getEmptyPost = () => ({ title: '', description: '', url: '', category: '資訊科技', is_important: false, is_pinned: false, links: [] })
 const newPost = ref(getEmptyPost()) 
 const adminBulletins = ref([]) 
 const editingPost = ref(null)  
 
-// 動態網址管理方法
-const addLinkToObj = (obj) => {
-  if (!obj.links) obj.links = []
-  obj.links.push({ name: '', url: '' })
-}
-const removeLinkFromObj = (obj, index) => {
-  obj.links.splice(index, 1)
-}
+const showRenderToast = ref(false)
 
 const visitorLogs = ref([])
-
 const keepAliveUrls = ref([])
 const newKeepAlive = ref({ name: '', url: '', home_url: '', platform: 'Vercel' })
 const isPinging = ref(false)
 const isPingingPlatform = ref('')
 const pingResult = ref('')
-
-// Render 通知變數
-const showRenderToast = ref(false)
 
 const vercelUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Vercel' || !item.platform))
 const renderUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Render'))
@@ -332,6 +342,7 @@ const login = () => {
     loadVisitorLogs()
     loadKeepAliveUrls()
     loadBulletins() 
+    loadTodos() // 登入載入暫存清單
   } else {
     errorMsg.value = '密碼錯誤！'
   }
@@ -349,21 +360,58 @@ const loadSettings = async () => {
     siteTitle.value = data.title
     marqueeText.value = data.marquee_text
     siteTheme.value = data.theme || 'purple'
+    siteSortOrder.value = data.sort_order || 'newest'
     currentTheme.value = siteTheme.value
   }
 }
 
 const updateSettings = async () => {
-  if (!siteTitle.value || !marqueeText.value) return alert('必填！')
-  await supabase.from('site_settings').upsert({ id: 1, title: siteTitle.value, marquee_text: marqueeText.value, theme: siteTheme.value })
+  if (!siteTitle.value || !marqueeText.value) return alert('名稱與跑馬燈必填！')
+  await supabase.from('site_settings').upsert({ 
+    id: 1, 
+    title: siteTitle.value, 
+    marquee_text: marqueeText.value, 
+    theme: siteTheme.value,
+    sort_order: siteSortOrder.value
+  })
   currentTheme.value = siteTheme.value 
   alert('設定已更新！')
 }
 
-// ====== 公告管理邏輯 ======
+// ====== To-Do 暫存清單邏輯 ======
+const loadTodos = async () => {
+  const { data } = await supabase.from('todos').select('*').order('created_at', { ascending: false })
+  if (data) todosList.value = data
+}
 
+const addTodo = async () => {
+  if (!newTodo.value.content) return alert('內容不能為空！')
+  // 處理 due_date 空字串轉換為 null
+  const payload = { ...newTodo.value }
+  if (!payload.due_date) payload.due_date = null
+  
+  await supabase.from('todos').insert([payload])
+  newTodo.value = { content: '', url: '', due_date: '' }
+  loadTodos()
+}
+
+const toggleTodo = async (todo) => {
+  await supabase.from('todos').update({ is_completed: !todo.is_completed }).eq('id', todo.id)
+  loadTodos()
+}
+
+const deleteTodo = async (id) => {
+  if (!confirm('確定刪除這個項目嗎？')) return
+  await supabase.from('todos').delete().eq('id', id)
+  loadTodos()
+}
+
+const formatTodoDate = (dateString) => {
+  return dayjs(dateString).format('MM/DD HH:mm')
+}
+
+// ====== 公告管理邏輯 ======
 const loadBulletins = async () => {
-  // 讓置頂的優先顯示，再依照建立時間排序
   const { data } = await supabase.from('bulletins').select('*').order('is_pinned', { ascending: false }).order('created_at', { ascending: false })
   if (data) adminBulletins.value = data
 }
@@ -383,7 +431,6 @@ const deletePost = async (id) => {
 }
 
 const startEdit = (post) => {
-  // 深拷貝，確保有 links 陣列
   editingPost.value = JSON.parse(JSON.stringify({ ...post, links: post.links || [] })) 
 }
 
@@ -393,16 +440,22 @@ const cancelEdit = () => {
 
 const saveEdit = async () => {
   if (!editingPost.value.title || !editingPost.value.url) return alert('標題與網址必填！')
-  
   const { id, title, description, url, category, is_important, is_pinned, links } = editingPost.value
   const { error } = await supabase.from('bulletins').update({ title, description, url, category, is_important, is_pinned, links }).eq('id', id)
-  
-  if (error) alert('更新失敗: ' + error.message)
+  if (error) alert('更新失敗')
   else {
     alert('更新成功！')
     editingPost.value = null 
     loadBulletins() 
   }
+}
+
+const addLinkToObj = (obj) => {
+  if (!obj.links) obj.links = []
+  obj.links.push({ name: '', url: '' })
+}
+const removeLinkFromObj = (obj, index) => {
+  obj.links.splice(index, 1)
 }
 
 const loadVisitorLogs = async () => {
@@ -412,9 +465,10 @@ const loadVisitorLogs = async () => {
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return dayjs(dateString).format('YYYY/MM/DD HH:mm:ss')
+  return dayjs(dateString).format('YYYY/MM/DD HH:mm')
 }
 
+// ====== 保活喚醒 ======
 const loadKeepAliveUrls = async () => {
   const { data } = await supabase.from('keep_alive_urls').select('*').order('created_at', { ascending: false })
   if (data) keepAliveUrls.value = data
@@ -462,16 +516,11 @@ const pingUrlsByPlatform = async (platform) => {
   pingResult.value = `${platform} 喚醒完成！成功發送 ${successCount}/${targetUrls.length} 個請求。`
   setTimeout(() => { pingResult.value = '' }, 4000)
 
-  // 【核心新增】Render 60秒後通知邏輯
   if (platform === 'Render') {
     setTimeout(() => {
-      // 只要使用者還停留在後台頁面，60秒一到就會彈出這則通知
       showRenderToast.value = true
-      // 10秒後自動關閉通知
-      setTimeout(() => {
-        showRenderToast.value = false
-      }, 10000)
-    }, 60000) // 60000 毫秒 = 60 秒
+      setTimeout(() => { showRenderToast.value = false }, 10000)
+    }, 60000) 
   }
 }
 </script>
@@ -480,7 +529,6 @@ const pingUrlsByPlatform = async (platform) => {
 .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 浮動通知動畫 */
 @keyframes bounce-in {
   0% { transform: translateY(150%); opacity: 0; }
   50% { transform: translateY(-10%); }
