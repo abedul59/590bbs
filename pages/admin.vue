@@ -59,7 +59,7 @@
       <section class="border-b pb-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
           <h3 class="text-xl font-semibold flex items-center gap-2">
-            🎙️ Telegram 錄音證據上傳中心
+            🎙️ Telegram 錄音證據批次上傳中心
             <span class="text-xs bg-indigo-100 text-indigo-800 px-2 py-1 rounded shadow-sm border border-indigo-200">雲端保全工具</span>
           </h3>
           
@@ -76,7 +76,7 @@
         <div class="bg-indigo-50 border border-indigo-200 p-4 md:p-6 rounded-xl shadow-sm relative">
           <div class="mb-4 text-xs text-indigo-700 bg-white p-3 rounded border border-indigo-100 flex items-start gap-2">
             <span class="text-lg">💡</span>
-            <p><strong>上傳守則：</strong>請先點擊右上角喚醒伺服器，等待倒數結束或浮動通知出現。接著填寫資訊、選擇檔案，最後按下「確認上傳」。</p>
+            <p><strong>批次上傳守則：</strong>請確保伺服器已喚醒。可以一次選取多個錄音檔，系統會「自動排隊」一個一個傳，避免伺服器記憶體爆滿崩潰！</p>
           </div>
 
           <div class="flex flex-col md:flex-row md:items-start gap-4 mb-4">
@@ -86,24 +86,33 @@
             </div>
             
             <div class="flex-1">
-              <label class="block text-sm font-bold text-indigo-900 mb-1">選擇上課錄音檔 (.wav / .mp3)</label>
-              <input type="file" accept="audio/*" @change="selectFile" :disabled="isUploading" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-indigo-200 file:text-indigo-800 hover:file:bg-indigo-300 disabled:opacity-50 cursor-pointer transition-colors shadow-sm bg-white border border-indigo-300 rounded">
+              <label class="block text-sm font-bold text-indigo-900 mb-1">選擇上課錄音檔 (可多選)</label>
+              <input type="file" accept="audio/*" multiple ref="tgFileInput" @change="selectFiles" :disabled="isUploading" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-indigo-200 file:text-indigo-800 hover:file:bg-indigo-300 disabled:opacity-50 cursor-pointer transition-colors shadow-sm bg-white border border-indigo-300 rounded">
             </div>
           </div>
 
+          <div v-if="selectedFiles.length > 0 && !isUploading" class="mb-4 bg-white border border-indigo-100 rounded-lg p-3 max-h-[150px] overflow-y-auto text-sm">
+            <p class="font-bold text-indigo-800 mb-2">已選擇 {{ selectedFiles.length }} 個檔案準備上傳：</p>
+            <ul class="list-disc pl-5 text-gray-600 space-y-1">
+              <li v-for="file in selectedFiles" :key="file.name">
+                {{ file.name }} <span class="text-xs text-gray-400">({{(file.size / 1024 / 1024).toFixed(2)}} MB)</span>
+              </li>
+            </ul>
+          </div>
+
           <div class="mb-4">
-             <label class="block text-sm font-bold text-indigo-900 mb-1">錄音檔補充說明 (選填，將隨檔案傳至 TG)</label>
-             <textarea v-model="tgCustomCaption" placeholder="例如：刑法總則第五章、有同學發問..." class="border border-indigo-300 p-2 w-full rounded focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm rows-2"></textarea>
+             <label class="block text-sm font-bold text-indigo-900 mb-1">錄音檔補充說明 (將套用於本次批次的所有檔案)</label>
+             <textarea v-model="tgCustomCaption" placeholder="例如：刑法總則第五章 (可留空)..." class="border border-indigo-300 p-2 w-full rounded focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm rows-2"></textarea>
           </div>
 
           <div class="flex flex-col md:flex-row items-center gap-4 pt-2 border-t border-indigo-200">
             <button 
-              @click="submitUpload" 
-              :disabled="!selectedFile || isUploading"
+              @click="submitBatchUpload" 
+              :disabled="selectedFiles.length === 0 || isUploading"
               class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               <span v-if="isUploading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              <span>{{ isUploading ? '大檔努力上傳中...' : '🚀 確認上傳至 Telegram' }}</span>
+              <span>{{ isUploading ? `排隊上傳中 (${currentUploadIndex}/${selectedFiles.length})...` : '🚀 開始批次上傳' }}</span>
             </button>
             
             <div v-if="uploadStatus" class="flex-1 px-3 py-2 rounded-lg text-sm font-bold" :class="uploadStatus.includes('❌') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'">
@@ -111,21 +120,24 @@
             </div>
           </div>
 
-          <div v-if="tgUploadResult" class="mt-4 bg-white border-2 border-green-400 p-4 rounded-lg shadow-sm animate-fade-in">
-            <h4 class="text-green-700 font-bold mb-2 flex items-center gap-1">✅ 上傳成功！您的法律證據已保全</h4>
-            <div class="space-y-2 text-sm">
-              <p><span class="font-bold text-gray-600">檔名：</span>{{ tgUploadResult.filename }}</p>
-              <p class="flex items-center gap-2"><span class="font-bold text-gray-600">連結：</span> <a :href="tgUploadResult.telegram_link" target="_blank" class="text-blue-600 hover:underline truncate">{{ tgUploadResult.telegram_link }}</a></p>
-              <p class="flex flex-col"><span class="font-bold text-gray-600">SHA-256 數位指紋：</span> <code class="bg-gray-100 p-1.5 rounded text-xs text-gray-800 mt-1 break-all">{{ tgUploadResult.file_hash }}</code></p>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-              <button @click="copyToClipboard(`錄音檔：${tgUploadResult.filename}\n連結：${tgUploadResult.telegram_link}\n指紋：${tgUploadResult.file_hash}`)" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm">
-                📋 複製完整資訊
-              </button>
-              <button @click="saveTgResultToTodo" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm">
-                📝 快速加入「暫存清單 (To-Do)」
+          <div v-if="tgUploadResults.length > 0" class="mt-6 bg-white border-2 border-green-400 p-4 rounded-lg shadow-sm animate-fade-in">
+            <div class="flex justify-between items-center border-b border-green-200 pb-2 mb-3">
+              <h4 class="text-green-700 font-bold flex items-center gap-1">✅ 成功保全 {{ tgUploadResults.length }} 筆證據！</h4>
+              <button @click="batchSaveToTodo" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors shadow-sm">
+                📝 一鍵全部加入「暫存清單」
               </button>
             </div>
+            
+            <ul class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+              <li v-for="(res, idx) in tgUploadResults" :key="idx" class="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
+                <p><span class="font-bold text-gray-600">檔名：</span>{{ res.filename }}</p>
+                <p class="flex items-center gap-2 my-1"><span class="font-bold text-gray-600">連結：</span> <a :href="res.telegram_link" target="_blank" class="text-blue-600 hover:underline truncate">{{ res.telegram_link }}</a></p>
+                <p class="flex flex-col"><span class="font-bold text-gray-600">SHA-256 指紋：</span> <code class="bg-white p-1 rounded text-xs text-gray-800 border border-gray-200 mt-1 break-all">{{ res.file_hash }}</code></p>
+                <div class="mt-2 text-right">
+                  <button @click="copyToClipboard(`錄音檔：${res.filename}\n連結：${res.telegram_link}\n指紋：${res.file_hash}`)" class="text-xs text-gray-500 hover:text-gray-800 font-bold underline">📋 複製單筆資訊</button>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       </section>
@@ -208,7 +220,7 @@
             <div class="flex gap-2 mb-2">
               <input v-model="newAdminNote.title" type="text" placeholder="標題 (必填)" class="border border-gray-300 p-2 w-full rounded text-sm focus:ring-1 focus:ring-blue-300">
             </div>
-            <textarea v-model="newAdminNote.description" placeholder="內容說明與防偽指紋..." class="border border-gray-300 p-2 w-full rounded text-sm mb-2 focus:ring-1 focus:ring-blue-300 rows-3"></textarea>
+            <textarea v-model="newAdminNote.description" placeholder="內容說明或貼上暫存清單的資訊..." class="border border-gray-300 p-2 w-full rounded text-sm mb-2 focus:ring-1 focus:ring-blue-300 rows-3"></textarea>
             <input v-model="newAdminNote.url" type="url" placeholder="Telegram 主要網址 (選填)" class="border border-gray-300 p-2 w-full rounded text-sm mb-3 focus:ring-1 focus:ring-blue-300 bg-gray-50">
             
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -511,74 +523,94 @@ const marqueeText = ref('')
 const siteTheme = ref('purple')
 const siteSortOrder = ref('newest') 
 
-// ====== 🌟 獨立的 Telegram 上傳狀態變數 ======
+// ====== 🌟 獨立的 Telegram 上傳狀態變數 (支援多檔案) ======
 const tgTopicId = ref('')
 const tgCustomCaption = ref('') // 自訂上傳說明
 const isUploading = ref(false)
 const uploadStatus = ref('')
-const tgUploadResult = ref(null)
-const selectedFile = ref(null) // 存放選擇的檔案
+const selectedFiles = ref([]) // 存放多個選擇的檔案
+const currentUploadIndex = ref(0) // 目前上傳到第幾個
+const tgUploadResults = ref([]) // 存放多筆成功結果
+const tgFileInput = ref(null) // 取得 input element 以便清空
 
-// 檔案選擇器 (先選檔，不直接傳)
-const selectFile = (event) => {
-  selectedFile.value = event.target.files[0]
-  if (selectedFile.value) {
-    uploadStatus.value = `📦 已選擇檔案：${selectedFile.value.name} (${(selectedFile.value.size / 1024 / 1024).toFixed(2)} MB)。請確認資料後點擊「確認上傳」。`
-    tgUploadResult.value = null
+// 檔案選擇器 (支援多選，先排隊不直接傳)
+const selectFiles = (event) => {
+  selectedFiles.value = Array.from(event.target.files)
+  if (selectedFiles.value.length > 0) {
+    uploadStatus.value = `📦 已選擇 ${selectedFiles.value.length} 個檔案。請確認資料後點擊「開始批次上傳」。`
+    tgUploadResults.value = [] // 重新選擇時清空先前的結果
   } else {
     uploadStatus.value = ''
   }
 }
 
-// 實際發送上傳請求
-const submitUpload = async () => {
-  if (!selectedFile.value) return
+// 實際發送批次上傳請求 (循序發送，保護 Render 記憶體)
+const submitBatchUpload = async () => {
+  if (selectedFiles.value.length === 0) return
   if (!tgTopicId.value) {
     return alert('請先輸入 Telegram Topic ID (月份資料夾代碼)')
   }
 
   isUploading.value = true
-  uploadStatus.value = '⏳ 大檔案努力上傳中，請保持網頁開啟 (可能需要幾分鐘)...'
-  tgUploadResult.value = null
+  tgUploadResults.value = []
+  let hasError = false
 
-  const formData = new FormData()
-  formData.append('file', selectedFile.value)
-  formData.append('topic_id', tgTopicId.value)
-  
-  // 組裝完整的 Telegram 訊息 Caption
-  const uploadTime = dayjs().format('YYYY/MM/DD HH:mm')
-  let captionText = `📂 錄音檔：${selectedFile.value.name}\n🕒 上傳時間：${uploadTime}`
-  if (tgCustomCaption.value) {
-    captionText += `\n📝 說明：${tgCustomCaption.value}`
+  for (let i = 0; i < selectedFiles.value.length; i++) {
+    const file = selectedFiles.value[i]
+    currentUploadIndex.value = i + 1
+    uploadStatus.value = `⏳ 正在上傳第 ${i + 1} / ${selectedFiles.value.length} 個檔案: ${file.name}...`
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('topic_id', tgTopicId.value)
+    
+    // 組裝完整的 Telegram 訊息 Caption
+    const uploadTime = dayjs().format('YYYY/MM/DD HH:mm')
+    let captionText = `📂 錄音檔：${file.name}\n🕒 上傳時間：${uploadTime}`
+    if (tgCustomCaption.value) {
+      captionText += `\n📝 說明：${tgCustomCaption.value}`
+    }
+    formData.append('caption', captionText)
+
+    try {
+      const response = await fetch('https://tg-uploader-api.onrender.com/upload/', {
+        method: 'POST',
+        body: formData
+      })
+
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const errorText = await response.text()
+        throw new Error(`伺服器尚未準備好 (HTTP ${response.status})。請點擊「獨立喚醒 TG 上傳伺服器」並等待倒數結束。`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        tgUploadResults.value.push(data)
+      } else {
+        throw new Error(data.detail || data.error || '未知錯誤')
+      }
+    } catch (error) {
+      console.error(`檔案 ${file.name} 上傳失敗:`, error)
+      alert(`檔案 ${file.name} 上傳失敗: ${error.message}\n系統將繼續嘗試上傳剩餘檔案。`)
+      hasError = true
+    }
   }
-  formData.append('caption', captionText) // 傳送給後端
 
-  try {
-    const response = await fetch('https://tg-uploader-api.onrender.com/upload/', {
-      method: 'POST',
-      body: formData
-    })
+  // 批次結束後的收尾
+  isUploading.value = false
+  currentUploadIndex.value = 0
+  if (tgFileInput.value) tgFileInput.value.value = '' // 清空 input 欄位
+  selectedFiles.value = [] // 清空排隊名單
+  tgCustomCaption.value = '' // 清空自訂說明
 
-    const contentType = response.headers.get("content-type")
-    if (!contentType || !contentType.includes("application/json")) {
-      const errorText = await response.text()
-      throw new Error(`伺服器尚未準備好 (HTTP ${response.status})。請點擊「獨立喚醒 TG 上傳伺服器」並等待倒數結束。`)
-    }
-
-    const data = await response.json()
-
-    if (data.success) {
-      tgUploadResult.value = data
-      uploadStatus.value = '' // 清空狀態，讓專屬的成功卡片顯示
-      tgCustomCaption.value = '' // 清空說明
-    } else {
-      throw new Error(data.detail || data.error || '未知錯誤')
-    }
-  } catch (error) {
-    console.error('上傳失敗:', error)
-    uploadStatus.value = `❌ 上傳失敗: ${error.message}`
-  } finally {
-    isUploading.value = false
+  if (hasError && tgUploadResults.value.length === 0) {
+    uploadStatus.value = `❌ 所有檔案上傳失敗，請檢查伺服器狀態。`
+  } else if (hasError) {
+    uploadStatus.value = `⚠️ 批次上傳結束，部分檔案失敗。成功保全了 ${tgUploadResults.value.length} 個檔案。`
+  } else {
+    uploadStatus.value = `✅ 批次上傳完美完成！共成功保全 ${tgUploadResults.value.length} 個檔案。`
   }
 }
 
@@ -591,16 +623,20 @@ const copyToClipboard = async (text) => {
   }
 }
 
-const saveTgResultToTodo = async () => {
-  if (!tgUploadResult.value) return
-  const content = `[TG證據] ${tgUploadResult.value.filename}\n指紋: ${tgUploadResult.value.file_hash}`
-  await supabase.from('todos').insert([{ 
-    content: content, 
-    url: tgUploadResult.value.telegram_link,
-    due_date: null
-  }])
+// 將批次上傳的結果一次性全部寫入暫存清單
+const batchSaveToTodo = async () => {
+  if (tgUploadResults.value.length === 0) return
+  
+  for (const res of tgUploadResults.value) {
+    const content = `[TG證據] ${res.filename}\n指紋: ${res.file_hash}`
+    await supabase.from('todos').insert([{ 
+      content: content, 
+      url: res.telegram_link,
+      due_date: null
+    }])
+  }
   loadTodos()
-  alert('✅ 已快速加入暫存清單 (To-Do)！可以作為日後新增公告的草稿。')
+  alert(`✅ 已將 ${tgUploadResults.value.length} 筆記錄快速加入暫存清單 (To-Do)！可以作為日後新增公告的草稿。`)
 }
 
 // 獨立 TG 伺服器喚醒邏輯
@@ -608,19 +644,17 @@ const tgWakeUpCountdown = ref(0)
 const wakeUpTgServer = async () => {
   tgWakeUpCountdown.value = 60
   
-  // 戳一下 TG Server 喚醒它
   try {
     const urlObj = new URL('https://tg-uploader-api.onrender.com/')
     urlObj.searchParams.append('_ping_ts', Date.now().toString())
     await fetch(urlObj.toString(), { method: 'GET', mode: 'no-cors', cache: 'no-store' })
   } catch (e) { console.log('TG 喚醒請求發出') }
 
-  // 60秒倒數計時器
   const timer = setInterval(() => {
     tgWakeUpCountdown.value--
     if (tgWakeUpCountdown.value <= 0) {
       clearInterval(timer)
-      showRenderToast.value = true // 彈出浮動通知
+      showRenderToast.value = true 
       setTimeout(() => { showRenderToast.value = false }, 10000)
     }
   }, 1000)
