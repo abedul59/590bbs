@@ -1,27 +1,19 @@
 <template>
   <div class="space-y-8 animate-fade-in relative">
-    
-    <div v-if="showRenderToast" class="absolute top-0 right-0 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-10 animate-fade-in flex items-center gap-2">
-      <span>🛸</span> 證據伺服器喚醒完成！
-    </div>
 
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2">
+      <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2 border-b border-gray-100 pb-4">
         <h3 class="text-xl font-semibold flex items-center gap-2 text-indigo-900">
           🎙️ Telegram 錄音證據批次上傳中心
-          <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded shadow-sm border border-red-200">法律證據專用 (含指紋)</span>
+          <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded shadow-sm border border-red-200">法律證據專用 (含指紋與雙向下載)</span>
         </h3>
-        <button @click="wakeUpTgServer" :disabled="tgWakeUpCountdown > 0" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-70">
-          <span v-if="tgWakeUpCountdown > 0">⏳ 伺服器喚醒中... ({{ tgWakeUpCountdown }}s)</span>
-          <span v-else>🛸 獨立喚醒 TG 證據伺服器</span>
-        </button>
-      </div>
+        </div>
       
       <div class="bg-indigo-50 border border-indigo-200 p-4 md:p-6 rounded-xl shadow-sm relative">
         <div class="flex flex-col md:flex-row md:items-start gap-4 mb-4">
           <div class="md:w-1/4">
             <label class="block text-sm font-bold text-indigo-900 mb-1">目標 Topic ID (月份)</label>
-            <input v-model="tgEvidenceTopicId" type="number" placeholder="例: 45" class="border border-indigo-300 p-2 w-full rounded focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm">
+            <input v-model="tgEvidenceTopicId" type="number" placeholder="例: 45" class="border border-indigo-300 p-2 w-full rounded focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm outline-none">
           </div>
           <div class="flex-1">
             <label class="block text-sm font-bold text-indigo-900 mb-1">選擇聲音檔 (保全用，可多選)</label>
@@ -36,7 +28,7 @@
 
         <div class="mb-4">
             <label class="block text-sm font-bold text-indigo-900 mb-1">補充說明 (套用於整批檔案)</label>
-            <textarea v-model="tgEvidenceCaption" placeholder="例如：刑法總則第五章..." class="border border-indigo-300 p-2 w-full rounded bg-white shadow-sm rows-2"></textarea>
+            <textarea v-model="tgEvidenceCaption" placeholder="例如：刑法總則第五章..." class="border border-indigo-300 p-2 w-full rounded bg-white shadow-sm rows-2 outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
         </div>
 
         <div class="flex flex-col md:flex-row items-center gap-4 pt-2 border-t border-indigo-200">
@@ -55,9 +47,15 @@
           <ul class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
             <li v-for="(res, idx) in tgEvidenceResults" :key="idx" class="bg-gray-50 p-3 rounded border border-gray-200 text-sm">
               <p><span class="font-bold text-gray-600">檔名：</span>{{ res.filename }}</p>
-              <p class="my-1 flex items-center gap-2"><span class="font-bold text-gray-600">連結：</span> <a :href="res.telegram_link" target="_blank" class="text-blue-600 hover:underline truncate">{{ res.telegram_link }}</a></p>
               <p class="flex flex-col"><span class="font-bold text-gray-600">SHA-256 指紋：</span> <code class="bg-white p-1 rounded border border-gray-200 text-xs text-gray-800 break-all mt-1">{{ res.file_hash }}</code></p>
-              <div class="mt-2 text-right"><button @click="copyToClipboard(`錄音檔：${res.filename}\n連結：${res.telegram_link}\n指紋：${res.file_hash}`)" class="text-xs text-gray-500 hover:text-gray-800 font-bold underline">📋 複製單筆</button></div>
+              
+              <div class="mt-3 flex items-center justify-between border-t border-gray-200 pt-2">
+                <div class="flex gap-2">
+                  <a :href="`https://lawxstudents168-tg-uploader-api.hf.space/download/${res.message_id}`" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
+                  <a :href="res.telegram_link" target="_blank" class="text-blue-600 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors">🔗 TG 原文</a>
+                </div>
+                <button @click="copyToClipboard(`錄音檔：${res.filename}\n連結：${res.telegram_link}\n指紋：${res.file_hash}`)" class="text-xs text-gray-500 hover:text-gray-800 font-bold underline">📋 複製單筆資訊</button>
+              </div>
             </li>
           </ul>
         </div>
@@ -77,15 +75,19 @@
         </div>
       </div>
       <ul class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-        <li v-for="item in tgTodosList" :key="item.id" :class="['flex justify-between items-center p-3 rounded-lg border transition-all duration-200', item.is_completed ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-indigo-50 border-indigo-200 shadow-sm']">
-          <div class="flex items-center gap-3 overflow-hidden">
-            <input type="checkbox" :checked="item.is_completed" @change="toggleTgTodo(item)" class="w-5 h-5 cursor-pointer text-indigo-600">
-            <div class="flex flex-col">
+        <li v-for="item in tgTodosList" :key="item.id" :class="['flex justify-between items-start p-3 rounded-lg border transition-all duration-200', item.is_completed ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-indigo-50 border-indigo-200 shadow-sm']">
+          <div class="flex items-start gap-3 overflow-hidden flex-1">
+            <input type="checkbox" :checked="item.is_completed" @change="toggleTgTodo(item)" class="w-5 h-5 mt-0.5 cursor-pointer text-indigo-600">
+            <div class="flex flex-col gap-1 w-full">
               <span :class="['font-medium text-gray-800 whitespace-pre-wrap text-sm', {'line-through text-gray-500': item.is_completed}]">{{ item.content }}</span>
-              <a v-if="item.url" :href="item.url" target="_blank" class="text-blue-500 text-xs hover:underline mt-1 w-fit">🔗 Telegram 連結</a>
+              
+              <div v-if="item.url" class="flex flex-wrap gap-2 mt-1">
+                <a :href="getDownloadUrl(item.url)" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
+                <a :href="item.url" target="_blank" class="text-blue-600 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors">🔗 TG 原文連結</a>
+              </div>
             </div>
           </div>
-          <button @click="deleteTgTodo(item.id)" class="text-gray-400 hover:text-red-500 p-1.5 rounded transition-colors">✖</button>
+          <button @click="deleteTgTodo(item.id)" class="text-gray-400 hover:text-red-500 p-1.5 rounded transition-colors ml-2">✖</button>
         </li>
         <li v-if="tgTodosList.length === 0" class="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">目前 TG 獨立暫存清單中沒有資料。</li>
       </ul>
@@ -99,6 +101,7 @@ import { ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
 
+// ====== 共用工具 ======
 const copyToClipboard = async (text) => {
   try { await navigator.clipboard.writeText(text); alert('✅ 已複製！') } 
   catch (err) { alert('❌ 複製失敗') }
@@ -120,21 +123,18 @@ const parseCSVString = (str) => {
 
 onMounted(() => { loadTgTodos() })
 
-// 喚醒按鈕邏輯
-const tgWakeUpCountdown = ref(0)
-const showRenderToast = ref(false)
-const wakeUpTgServer = async () => {
-  tgWakeUpCountdown.value = 60
-  try { await fetch('https://tg-uploader-api.onrender.com/?_ping_ts='+Date.now(), { mode: 'no-cors' }) } catch(e){}
-  const timer = setInterval(() => { 
-    tgWakeUpCountdown.value--; 
-    if (tgWakeUpCountdown.value <= 0) {
-      clearInterval(timer); showRenderToast.value = true; setTimeout(() => { showRenderToast.value = false }, 10000)
-    }
-  }, 1000)
+// ====== 🌟 下載連結轉換邏輯 ======
+// 將資料庫儲存的原始 TG 網址，轉換為 HF 伺服器的串流下載網址
+const getDownloadUrl = (url) => {
+  if (!url) return '#'
+  if (!url.includes('t.me/c/')) return url
+  const parts = url.split('/')
+  const messageId = parts[parts.length - 1]
+  // 注意：這裡對應的是 uploader 的 HF 網址
+  return `https://lawxstudents168-tg-uploader-api.hf.space/download/${messageId}`
 }
 
-// 區塊 1：錄音證據批次保全
+// ====== 區塊 1：錄音證據批次保全 ======
 const tgEvidenceTopicId = ref(''); const tgEvidenceCaption = ref(''); const isEvidenceUploading = ref(false); const evidenceUploadStatus = ref(''); const selectedEvidenceFiles = ref([]); const currentEvidenceUploadIndex = ref(0); const tgEvidenceResults = ref([]); const tgEvidenceFileInput = ref(null)
 
 const selectEvidenceFiles = (e) => { 
@@ -156,8 +156,9 @@ const submitEvidenceBatchUpload = async () => {
     fd.append('caption', cap)
     
     try {
-      const res = await fetch('https://tg-uploader-api.onrender.com/upload/', { method: 'POST', body: fd })
-      if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器未喚醒`)
+      // 🌟 已更新為全新的 HF 網址
+      const res = await fetch('https://lawxstudents168-tg-uploader-api.hf.space/upload/', { method: 'POST', body: fd })
+      if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器無回應或超時`)
       const data = await res.json()
       if (data.success) tgEvidenceResults.value.push(data)
     } catch (e) { hasError = true }
@@ -166,7 +167,7 @@ const submitEvidenceBatchUpload = async () => {
   evidenceUploadStatus.value = hasError ? (tgEvidenceResults.value.length ? '⚠️ 部分失敗' : '❌ 上傳失敗') : '✅ 批次保全完成'
 }
 
-// 區塊 2：TG 獨立暫存清單 (tg_todos)
+// ====== 區塊 2：TG 獨立暫存清單 (tg_todos) ======
 const tgTodosList = ref([]); const tgTodoCsvInput = ref(null)
 const loadTgTodos = async () => { const { data } = await supabase.from('tg_todos').select('*').order('created_at', { ascending: false }); if(data) tgTodosList.value = data }
 
