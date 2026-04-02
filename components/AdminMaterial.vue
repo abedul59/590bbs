@@ -1,23 +1,13 @@
 <template>
   <div class="space-y-8 animate-fade-in relative">
     
-    <div v-if="showRenderToast" class="absolute top-0 right-0 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-10 animate-fade-in flex items-center gap-2">
-      <span>🛸</span> 教材伺服器喚醒完成！
-    </div>
-
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-2 border-b border-gray-100 pb-4">
         <h3 class="text-xl font-semibold flex items-center gap-2 text-teal-800">
           📚 Telegram 上課教材中心
           <span class="text-xs bg-teal-100 text-teal-800 px-2 py-1 rounded shadow-sm border border-teal-200">大型影片與講義專區 (雙向)</span>
         </h3>
-        <div class="flex gap-2">
-          <button @click="wakeUpMaterialServer" :disabled="materialWakeUpCountdown > 0" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow transition-colors flex items-center gap-2 disabled:opacity-70">
-            <span v-if="materialWakeUpCountdown > 0">⏳ 伺服器喚醒中... ({{ materialWakeUpCountdown }}s)</span>
-            <span v-else>🛸 獨立喚醒 教材伺服器</span>
-          </button>
         </div>
-      </div>
 
       <div class="bg-teal-50 border border-teal-200 p-4 md:p-6 rounded-xl shadow-sm mb-6">
         <h4 class="font-bold text-teal-900 mb-4 flex items-center gap-1">⬆️ 上傳新教材</h4>
@@ -55,13 +45,13 @@
       <div>
         <div class="flex justify-between items-center mb-3">
           <h4 class="font-bold text-teal-900 flex items-center">
-            <span>☁️ 雲端教材庫 (快速下載)</span>
+            <span>☁️ 雲端教材庫 (極速串流下載)</span>
             <span class="ml-2 text-xs font-normal text-gray-500 border border-gray-200 px-2 py-1 rounded bg-gray-50">共 {{ tgMaterialsList.length }} 筆教材</span>
           </h4>
           <div class="flex gap-2">
             <input type="file" accept=".csv" ref="tgMaterialCsvInput" class="hidden" @change="handleMaterialCsvImport">
-            <button @click="() => tgMaterialCsvInput.click()" class="text-xs bg-white border border-gray-300 text-gray-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-gray-100 transition-colors">📥 匯入教材清單</button>
-            <button @click="exportMaterialsCSV" class="text-xs bg-teal-600 text-white font-bold px-3 py-1.5 rounded shadow-sm hover:bg-teal-700 transition-colors">📤 匯出教材清單</button>
+            <button @click="() => tgMaterialCsvInput.click()" class="text-xs bg-white border border-gray-300 text-gray-700 font-bold px-3 py-1.5 rounded shadow-sm hover:bg-gray-100 transition-colors">📥 匯入清單</button>
+            <button @click="exportMaterialsCSV" class="text-xs bg-teal-600 text-white font-bold px-3 py-1.5 rounded shadow-sm hover:bg-teal-700 transition-colors">📤 匯出清單</button>
           </div>
         </div>
         
@@ -84,8 +74,10 @@
             <div v-else class="flex-1 mb-4"></div>
 
             <div class="flex flex-wrap gap-2 mt-auto border-t border-gray-100 pt-3">
-              <a :href="mat.url" target="_blank" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">🔗 開啟 / 下載</a>
-              <button @click="copyToClipboard(mat.url)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">📋 複製連結</button>
+              <a :href="getDownloadUrl(mat.url)" target="_blank" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">
+                📥 高速下載
+              </a>
+              <button @click="copyToClipboard(mat.url)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">📋 複製 TG 連結</button>
             </div>
           </div>
           
@@ -129,19 +121,22 @@ onMounted(() => {
   loadMaterials()
 })
 
-// ====== 教材伺服器專屬喚醒邏輯 ======
-const materialWakeUpCountdown = ref(0)
-const showRenderToast = ref(false)
-const wakeUpMaterialServer = async () => {
-  materialWakeUpCountdown.value = 60
-  // 🌟 這裡指向你第二個獨立的 API
-  try { await fetch('https://tg-material-api.onrender.com/?_ping_ts='+Date.now(), { mode: 'no-cors' }) } catch(e){}
-  const timer = setInterval(() => { 
-    materialWakeUpCountdown.value--; 
-    if (materialWakeUpCountdown.value <= 0) {
-      clearInterval(timer); showRenderToast.value = true; setTimeout(() => { showRenderToast.value = false }, 10000)
-    }
-  }, 1000)
+// ====== 🌟 下載連結轉換邏輯 ======
+// 將資料庫儲存的原始 Telegram 網址，轉換為 HF 伺服器的串流下載網址
+const getDownloadUrl = (url) => {
+  if (!url) return '#'
+  
+  // 如果網址本身就已經是下載連結，或者不是 TG 的貼文連結，就原封不動回傳
+  if (!url.includes('t.me/c/')) {
+    return url
+  }
+  
+  // 擷取網址最後面的 Message ID (例如 t.me/c/123/456 -> 456)
+  const parts = url.split('/')
+  const messageId = parts[parts.length - 1]
+  
+  // 🌟 對接到最新的 Hugging Face API 網址
+  return `https://lawxstudents168-tg-material-api.hf.space/download/${messageId}`
 }
 
 // ====== Telegram 上課教材中心 (tg_materials) ======
@@ -171,9 +166,11 @@ const submitMaterialBatchUpload = async () => {
     fd.append('caption', cap)
     
     try {
-      // 🌟 這裡指向你第二個獨立的 API
-      const res = await fetch('https://tg-material-api.onrender.com/upload/', { method: 'POST', body: fd })
-      if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器未喚醒`)
+      // 🌟 替換為 Hugging Face API 網址
+      const res = await fetch('https://lawxstudents168-tg-material-api.hf.space/upload/', { method: 'POST', body: fd })
+      
+      // 注意：如果 HF 回傳了網頁而不是 JSON，代表可能遇到超時或錯誤
+      if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器無回應或超時`)
       const data = await res.json()
       
       if (data.success) {
@@ -191,7 +188,7 @@ const submitMaterialBatchUpload = async () => {
   }
   
   isMaterialUploading.value = false; selectedMaterialFiles.value = []; if(tgMaterialFileInput.value) tgMaterialFileInput.value.value = ''; tgMaterialCaption.value = ''
-  materialUploadStatus.value = hasError ? (successCount ? '⚠️ 部分教材上傳失敗' : '❌ 上傳失敗') : `✅ 成功上傳 ${successCount} 份教材！`
+  materialUploadStatus.value = hasError ? (successCount ? '⚠️ 部分教材上傳失敗' : '❌ 上傳失敗 (可能檔案過大，建議使用 Go 傳輸工具)') : `✅ 成功上傳 ${successCount} 份教材！`
   loadMaterials()
 }
 
