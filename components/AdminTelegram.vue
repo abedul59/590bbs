@@ -301,7 +301,7 @@ const submitMaterialBatchUpload = async () => {
     fd.append('caption', cap)
     
     try {
-      const res = await fetch('https://tg-uploader-api.onrender.com/upload/', { method: 'POST', body: fd })
+      const res = await fetch('https://tg-material-api.onrender.com/upload/', { method: 'POST', body: fd })
       if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器未喚醒`)
       const data = await res.json()
       
