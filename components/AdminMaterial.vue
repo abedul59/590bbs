@@ -105,12 +105,12 @@
             <p v-if="mat.caption" class="text-sm text-gray-600 whitespace-pre-wrap flex-1 mb-4 bg-gray-50 p-2 rounded border border-gray-100">{{ mat.caption }}</p>
             <div v-else class="flex-1 mb-4"></div>
 
-            <div class="flex flex-wrap gap-2 mt-auto border-t border-gray-100 pt-3">
-              <a :href="getDownloadUrl(mat.url)" target="_blank" class="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">
-                📥 高速下載
-              </a>
-              <button @click="copyToClipboard(mat.url)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">📋 複製 TG 連結</button>
-            </div>
+<div class="flex flex-wrap gap-2 mt-auto border-t border-gray-100 pt-3">
+  <a :href="getDownloadUrl(mat.url)" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">
+    📥 立即串流下載
+  </a>
+  <button @click="copyToClipboard(mat.url)" class="bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-300 px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors text-center flex-1">📋 複製 TG 連結</button>
+</div>
           </div>
           
           <div v-if="tgMaterialsList.length === 0" class="col-span-1 md:col-span-2 text-center py-10 text-gray-400 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
