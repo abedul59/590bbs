@@ -7,9 +7,9 @@
           📚 Telegram 上課教材中心
           <span class="text-xs bg-teal-100 text-teal-800 px-2 py-1 rounded shadow-sm border border-teal-200">大型影片與講義專區 (雙向)</span>
         </h3>
-        </div>
+      </div>
 
-      <div class="bg-teal-50 border border-teal-200 p-4 md:p-6 rounded-xl shadow-sm mb-6">
+      <div class="bg-teal-50 border border-teal-200 p-4 md:p-6 rounded-xl shadow-sm mb-8">
         <h4 class="font-bold text-teal-900 mb-4 flex items-center gap-1">⬆️ 上傳新教材</h4>
         
         <div class="flex flex-col md:flex-row md:items-start gap-4 mb-4">
@@ -18,7 +18,7 @@
             <input v-model="tgMaterialTopicId" type="number" placeholder="例: 99" class="border border-teal-300 p-2 w-full rounded focus:ring-2 focus:ring-teal-400 bg-white shadow-sm outline-none">
           </div>
           <div class="flex-1">
-            <label class="block text-sm font-bold text-teal-900 mb-1">選擇教材檔案 (支援影片、文件、壓縮檔，可多選)</label>
+            <label class="block text-sm font-bold text-teal-900 mb-1">選擇教材檔案 (支援多選)</label>
             <input type="file" accept="video/mp4,video/x-m4v,video/*,application/pdf,application/zip,application/x-rar-compressed,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple ref="tgMaterialFileInput" @change="selectMaterialFiles" :disabled="isMaterialUploading" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-teal-200 file:text-teal-800 hover:file:bg-teal-300 cursor-pointer bg-white border border-teal-300 rounded shadow-sm disabled:opacity-50 transition-colors">
           </div>
         </div>
@@ -42,11 +42,43 @@
         </div>
       </div>
 
+      <div class="bg-indigo-50 border border-indigo-200 p-4 md:p-6 rounded-xl shadow-sm mb-8">
+        <h4 class="font-bold text-indigo-900 mb-4 flex items-center gap-1">🔍 雲端教材即時搜尋 (免登入直接下)</h4>
+        
+        <div class="flex flex-col md:flex-row gap-2 mb-4">
+          <input v-model="searchQuery" @keyup.enter="searchCloudFiles" type="text" placeholder="輸入教材名稱關鍵字 (例如: 第五章)..." class="border border-indigo-300 p-2 flex-1 rounded focus:ring-2 focus:ring-indigo-400 bg-white shadow-sm outline-none">
+          <button @click="searchCloudFiles" :disabled="isSearching" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 rounded-lg shadow transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            <span v-if="isSearching" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+            {{ isSearching ? '搜尋中...' : '🔍 搜尋' }}
+          </button>
+        </div>
+
+        <div v-if="searchResults.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[400px] overflow-y-auto pr-2">
+          <div v-for="file in searchResults" :key="file.id" class="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm flex flex-col hover:shadow-md transition-shadow">
+            <h5 class="font-bold text-gray-800 break-all leading-tight mb-2">{{ file.filename }}</h5>
+            <div class="flex items-center justify-between text-xs text-gray-500 mb-3">
+              <span class="bg-gray-100 px-2 py-1 rounded">{{ file.size_mb }} MB</span>
+              <span>{{ file.date }}</span>
+            </div>
+            <p v-if="file.caption" class="text-sm text-gray-600 mb-4 bg-gray-50 p-2 rounded truncate">{{ file.caption }}</p>
+            <div v-else class="flex-1 mb-4"></div>
+            
+            <a :href="`https://lawxstudents168-tg-material-api.hf.space/download/${file.id}`" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-2 rounded text-sm font-bold shadow-sm transition-colors text-center mt-auto">
+              📥 立即串流下載
+            </a>
+          </div>
+        </div>
+        
+        <div v-else-if="hasSearched" class="text-center py-6 text-gray-500 bg-white rounded-lg border border-dashed border-indigo-200">
+          找不到符合的檔案。
+        </div>
+      </div>
+
       <div>
         <div class="flex justify-between items-center mb-3">
           <h4 class="font-bold text-teal-900 flex items-center">
-            <span>☁️ 雲端教材庫 (極速串流下載)</span>
-            <span class="ml-2 text-xs font-normal text-gray-500 border border-gray-200 px-2 py-1 rounded bg-gray-50">共 {{ tgMaterialsList.length }} 筆教材</span>
+            <span>☁️ 資料庫教材紀錄</span>
+            <span class="ml-2 text-xs font-normal text-gray-500 border border-gray-200 px-2 py-1 rounded bg-gray-50">共 {{ tgMaterialsList.length }} 筆</span>
           </h4>
           <div class="flex gap-2">
             <input type="file" accept=".csv" ref="tgMaterialCsvInput" class="hidden" @change="handleMaterialCsvImport">
@@ -82,7 +114,7 @@
           </div>
           
           <div v-if="tgMaterialsList.length === 0" class="col-span-1 md:col-span-2 text-center py-10 text-gray-400 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
-            目前雲端沒有任何教材。
+            目前雲端沒有任何教材紀錄。
           </div>
         </div>
       </div>
@@ -122,24 +154,39 @@ onMounted(() => {
 })
 
 // ====== 🌟 下載連結轉換邏輯 ======
-// 將資料庫儲存的原始 Telegram 網址，轉換為 HF 伺服器的串流下載網址
 const getDownloadUrl = (url) => {
   if (!url) return '#'
-  
-  // 如果網址本身就已經是下載連結，或者不是 TG 的貼文連結，就原封不動回傳
-  if (!url.includes('t.me/c/')) {
-    return url
-  }
-  
-  // 擷取網址最後面的 Message ID (例如 t.me/c/123/456 -> 456)
+  if (!url.includes('t.me/c/')) return url
   const parts = url.split('/')
   const messageId = parts[parts.length - 1]
-  
-  // 🌟 對接到最新的 Hugging Face API 網址
   return `https://lawxstudents168-tg-material-api.hf.space/download/${messageId}`
 }
 
-// ====== Telegram 上課教材中心 (tg_materials) ======
+// ====== 🔍 即時搜尋功能 (全新加入) ======
+const searchQuery = ref('')
+const searchResults = ref([])
+const isSearching = ref(false)
+const hasSearched = ref(false)
+
+const searchCloudFiles = async () => {
+  isSearching.value = true
+  hasSearched.value = true
+  try {
+    const res = await fetch(`https://lawxstudents168-tg-material-api.hf.space/search?query=${encodeURIComponent(searchQuery.value)}&limit=20`)
+    const data = await res.json()
+    if (data.success) {
+      searchResults.value = data.data
+    } else {
+      alert('搜尋失敗：' + data.error)
+    }
+  } catch (error) {
+    alert('無法連線到搜尋伺服器')
+  } finally {
+    isSearching.value = false
+  }
+}
+
+// ====== ⬆️ 上傳與資料庫歷史清單 ======
 const tgMaterialsList = ref([])
 const tgMaterialTopicId = ref(''); const tgMaterialCaption = ref(''); const isMaterialUploading = ref(false); const materialUploadStatus = ref(''); const selectedMaterialFiles = ref([]); const currentMaterialUploadIndex = ref(0); const tgMaterialFileInput = ref(null); const tgMaterialCsvInput = ref(null)
 
@@ -166,10 +213,7 @@ const submitMaterialBatchUpload = async () => {
     fd.append('caption', cap)
     
     try {
-      // 🌟 替換為 Hugging Face API 網址
       const res = await fetch('https://lawxstudents168-tg-material-api.hf.space/upload/', { method: 'POST', body: fd })
-      
-      // 注意：如果 HF 回傳了網頁而不是 JSON，代表可能遇到超時或錯誤
       if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器無回應或超時`)
       const data = await res.json()
       
@@ -193,7 +237,7 @@ const submitMaterialBatchUpload = async () => {
 }
 
 const deleteMaterial = async (id) => {
-  if(confirm('確定要從雲端教材庫移除此筆紀錄嗎？ (此動作不會刪除 TG 群組內的實體檔案)')) {
+  if(confirm('確定要從雲端紀錄移除此筆嗎？ (不會刪除 TG 實體檔案)')) {
     await supabase.from('tg_materials').delete().eq('id', id)
     loadMaterials()
   }
