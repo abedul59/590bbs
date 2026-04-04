@@ -74,8 +74,8 @@
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-8">
       <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-3">
         <h3 class="text-xl font-semibold flex items-center gap-2 text-indigo-900">
-          📁 TG 獨立暫存清單 
-          <span class="text-xs text-gray-400 font-normal border px-2 py-1 rounded">證據與草稿專屬 (雙校共用)</span>
+          📁 TG 獨立暫存清單 - {{ activeSchool }}
+          <span class="text-xs text-indigo-600 font-normal border border-indigo-200 bg-indigo-50 px-2 py-1 rounded">專屬證據與草稿</span>
         </h3>
         <div class="flex gap-2">
           <input type="file" accept=".csv" ref="tgTodoCsvInput" class="hidden" @change="handleTgTodoCsvImport">
@@ -84,7 +84,7 @@
         </div>
       </div>
       <ul class="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-        <li v-for="item in tgTodosList" :key="item.id" :class="['flex justify-between items-start p-3 rounded-lg border transition-all duration-200', item.is_completed ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-indigo-50 border-indigo-200 shadow-sm']">
+        <li v-for="item in filteredTgTodos" :key="item.id" :class="['flex justify-between items-start p-3 rounded-lg border transition-all duration-200', item.is_completed ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-indigo-50 border-indigo-200 shadow-sm']">
           <div class="flex items-start gap-3 overflow-hidden flex-1">
             <input type="checkbox" :checked="item.is_completed" @change="toggleTgTodo(item)" class="w-5 h-5 mt-0.5 cursor-pointer text-indigo-600">
             <div class="flex flex-col gap-1 w-full">
@@ -98,7 +98,9 @@
           </div>
           <button @click="deleteTgTodo(item.id)" class="text-gray-400 hover:text-red-500 p-1.5 rounded transition-colors ml-2">✖</button>
         </li>
-        <li v-if="tgTodosList.length === 0" class="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">目前 TG 獨立暫存清單中沒有資料。</li>
+        <li v-if="filteredTgTodos.length === 0" class="text-sm text-gray-400 py-4 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          目前 {{ activeSchool }} 的獨立暫存清單中沒有資料。
+        </li>
       </ul>
     </section>
 
@@ -110,18 +112,17 @@ import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
 
-// ====== 🌟 分頁與 API 網址設定 ======
+// ====== 分頁與 API 網址設定 ======
 const activeSchool = ref('SHJHS')
 
-// ⚠️ 請在這裡替換您為 GRJHS 新建立的 Hugging Face API 網址！
+// ⚠️ 確認這裡是您的 Hugging Face API 網址！
 const apiUrls = {
   'SHJHS': 'https://lawxstudents168-tg-uploader-api.hf.space',
-  'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' // <-- 請將這裡改為您的 GRJHS Space 網址
+  'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' 
 }
 
 const currentApiUrl = computed(() => apiUrls[activeSchool.value])
 
-// 切換學校時，自動清空底下的上傳表單，避免傳錯地方
 const switchSchool = (school) => {
   activeSchool.value = school
   selectedEvidenceFiles.value = []
@@ -160,8 +161,7 @@ const getDownloadUrl = (url, content) => {
   const parts = url.split('/')
   const messageId = parts[parts.length - 1]
   
-  // 透過內容裡面的標籤判斷要向哪一個伺服器要檔案
-  let targetApi = apiUrls['SHJHS'] // 預設
+  let targetApi = apiUrls['SHJHS']
   if (content && content.includes('[證據-GRJHS]')) {
     targetApi = apiUrls['GRJHS']
   }
@@ -191,7 +191,6 @@ const submitEvidenceBatchUpload = async () => {
     fd.append('caption', cap)
     
     try {
-      // 🌟 自動根據選取的學校，發送到對應的 HF 伺服器
       const res = await fetch(`${currentApiUrl.value}/upload/`, { method: 'POST', body: fd })
       if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器無回應或超時`)
       const data = await res.json()
@@ -204,10 +203,23 @@ const submitEvidenceBatchUpload = async () => {
 
 // ====== 區塊 2：TG 獨立暫存清單 (tg_todos) ======
 const tgTodosList = ref([]); const tgTodoCsvInput = ref(null)
+
+// 🌟 核心過濾邏輯：根據目前的 activeSchool 自動過濾清單
+const filteredTgTodos = computed(() => {
+  return tgTodosList.value.filter(item => {
+    if (activeSchool.value === 'GRJHS') {
+      // 如果選擇 GRJHS，只顯示包含 GRJHS 標籤的內容
+      return item.content && item.content.includes('[證據-GRJHS]')
+    } else {
+      // 預設 (SHJHS)：顯示沒有 GRJHS 標籤的內容（包含有 SHJHS 標籤的，以及更早之前沒標籤的舊資料）
+      return !item.content || !item.content.includes('[證據-GRJHS]')
+    }
+  })
+})
+
 const loadTgTodos = async () => { const { data } = await supabase.from('tg_todos').select('*').order('created_at', { ascending: false }); if(data) tgTodosList.value = data }
 
 const batchSaveToTgTodo = async () => {
-  // 🌟 在存入資料庫時，自動加上學校標籤 [證據-SHJHS] 或 [證據-GRJHS]
   for (const r of tgEvidenceResults.value) await supabase.from('tg_todos').insert([{ content: `[證據-${activeSchool.value}] ${r.filename}\n指紋: ${r.file_hash}`, url: r.telegram_link, is_completed: false }])
   loadTgTodos(); alert(`已將 ${activeSchool.value} 證據加入暫存清單！`)
 }
@@ -215,16 +227,26 @@ const toggleTgTodo = async (t) => { await supabase.from('tg_todos').update({ is_
 const deleteTgTodo = async (id) => { if(confirm('刪除？')) { await supabase.from('tg_todos').delete().eq('id', id); loadTgTodos() } }
 
 const exportTgTodosCSV = () => {
-  if (!tgTodosList.value.length) return alert('無資料')
+  // 🌟 匯出時，只匯出畫面上顯示的該學校資料
+  if (!filteredTgTodos.value.length) return alert('無資料可以匯出')
   let csv = '內容,網址,是否完成\n'
-  tgTodosList.value.forEach(t => csv += `"${(t.content||'').replace(/"/g, '""')}","${t.url||''}",${t.is_completed?'TRUE':'FALSE'}\n`)
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv])); a.download = `TG清單_${dayjs().format('YYYYMMDD')}.csv`; a.click()
+  filteredTgTodos.value.forEach(t => csv += `"${(t.content||'').replace(/"/g, '""')}","${t.url||''}",${t.is_completed?'TRUE':'FALSE'}\n`)
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv])); a.download = `TG清單_${activeSchool.value}_${dayjs().format('YYYYMMDD')}.csv`; a.click()
 }
 const handleTgTodoCsvImport = async (e) => {
   const reader = new FileReader(); reader.onload = async (ev) => {
     const rows = parseCSVString(ev.target.result); const ins = []
-    for(let i=1; i<rows.length; i++) if(rows[i].length>=3) ins.push({ content: rows[i][0], url: rows[i][1], is_completed: rows[i][2].toUpperCase()==='TRUE' })
-    if(ins.length) { await supabase.from('tg_todos').insert(ins); alert(`成功匯入 ${ins.length} 筆！`); loadTgTodos() }
+    for(let i=1; i<rows.length; i++) {
+      if(rows[i].length>=3) {
+        let content = rows[i][0]
+        // 🌟 匯入時，如果沒標籤，就自動加上目前的學校標籤，避免迷失
+        if (!content.includes('[證據-')) {
+           content = `[證據-${activeSchool.value}] ${content}`
+        }
+        ins.push({ content: content, url: rows[i][1], is_completed: rows[i][2].toUpperCase()==='TRUE' })
+      }
+    }
+    if(ins.length) { await supabase.from('tg_todos').insert(ins); alert(`成功匯入 ${ins.length} 筆至 ${activeSchool.value}！`); loadTgTodos() }
   }; reader.readAsText(e.target.files[0]); tgTodoCsvInput.value.value = ''
 }
 </script>
