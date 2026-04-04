@@ -1,13 +1,22 @@
 <template>
-  <div class="space-y-8 animate-fade-in relative">
+  <div class="space-y-6 animate-fade-in relative">
 
-    <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+    <div class="flex gap-2 border-b-2 border-indigo-200 pb-0">
+      <button @click="switchSchool('SHJHS')" :class="activeSchool === 'SHJHS' ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'" class="px-6 py-3 rounded-t-xl font-bold transition-colors">
+        🏫 SHJHS (新化)
+      </button>
+      <button @click="switchSchool('GRJHS')" :class="activeSchool === 'GRJHS' ? 'bg-indigo-600 text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'" class="px-6 py-3 rounded-t-xl font-bold transition-colors">
+        🏫 GRJHS (歸仁)
+      </button>
+    </div>
+
+    <section class="bg-white p-6 rounded-b-xl rounded-tr-xl shadow-sm border border-gray-100">
       <div class="flex flex-col md:flex-row md:items-center justify-between mb-4 gap-2 border-b border-gray-100 pb-4">
         <h3 class="text-xl font-semibold flex items-center gap-2 text-indigo-900">
-          🎙️ Telegram 錄音證據批次上傳中心
+          🎙️ Telegram 錄音證據批次上傳中心 - {{ activeSchool }}
           <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded shadow-sm border border-red-200">法律證據專用 (含指紋與雙向下載)</span>
         </h3>
-        </div>
+      </div>
       
       <div class="bg-indigo-50 border border-indigo-200 p-4 md:p-6 rounded-xl shadow-sm relative">
         <div class="flex flex-col md:flex-row md:items-start gap-4 mb-4">
@@ -34,14 +43,14 @@
         <div class="flex flex-col md:flex-row items-center gap-4 pt-2 border-t border-indigo-200">
           <button @click="submitEvidenceBatchUpload" :disabled="selectedEvidenceFiles.length === 0 || isEvidenceUploading" class="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-lg shadow-md transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
             <span v-if="isEvidenceUploading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            <span>{{ isEvidenceUploading ? `排隊上傳中 (${currentEvidenceUploadIndex}/${selectedEvidenceFiles.length})...` : '🚀 開始保全批次上傳' }}</span>
+            <span>{{ isEvidenceUploading ? `排隊上傳中 (${currentEvidenceUploadIndex}/${selectedEvidenceFiles.length})...` : `🚀 保全批次上傳至 ${activeSchool}` }}</span>
           </button>
           <div v-if="evidenceUploadStatus" class="flex-1 px-3 py-2 rounded-lg text-sm font-bold" :class="evidenceUploadStatus.includes('❌') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'">{{ evidenceUploadStatus }}</div>
         </div>
 
         <div v-if="tgEvidenceResults.length > 0" class="mt-6 bg-white border-2 border-green-400 p-4 rounded-lg shadow-sm animate-fade-in">
           <div class="flex justify-between items-center border-b border-green-200 pb-2 mb-3">
-            <h4 class="text-green-700 font-bold">✅ 成功保全 {{ tgEvidenceResults.length }} 筆證據</h4>
+            <h4 class="text-green-700 font-bold">✅ 成功保全 {{ tgEvidenceResults.length }} 筆證據 ({{ activeSchool }})</h4>
             <button @click="batchSaveToTgTodo" class="bg-indigo-500 hover:bg-indigo-600 text-white px-3 py-1.5 rounded text-xs font-bold shadow-sm transition-colors">📝 全部加入 TG 獨立暫存清單</button>
           </div>
           <ul class="space-y-4 max-h-[300px] overflow-y-auto pr-2">
@@ -51,10 +60,10 @@
               
               <div class="mt-3 flex items-center justify-between border-t border-gray-200 pt-2">
                 <div class="flex gap-2">
-                  <a :href="`https://lawxstudents168-tg-uploader-api.hf.space/download/${res.message_id}`" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
+                  <a :href="`${currentApiUrl}/download/${res.message_id}`" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
                   <a :href="res.telegram_link" target="_blank" class="text-blue-600 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors">🔗 TG 原文</a>
                 </div>
-                <button @click="copyToClipboard(`錄音檔：${res.filename}\n連結：${res.telegram_link}\n指紋：${res.file_hash}`)" class="text-xs text-gray-500 hover:text-gray-800 font-bold underline">📋 複製單筆資訊</button>
+                <button @click="copyToClipboard(`[${activeSchool}] 錄音檔：${res.filename}\n連結：${res.telegram_link}\n指紋：${res.file_hash}`)" class="text-xs text-gray-500 hover:text-gray-800 font-bold underline">📋 複製單筆資訊</button>
               </div>
             </li>
           </ul>
@@ -62,11 +71,11 @@
       </div>
     </section>
 
-    <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+    <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-8">
       <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-3">
         <h3 class="text-xl font-semibold flex items-center gap-2 text-indigo-900">
           📁 TG 獨立暫存清單 
-          <span class="text-xs text-gray-400 font-normal border px-2 py-1 rounded">證據與草稿專屬</span>
+          <span class="text-xs text-gray-400 font-normal border px-2 py-1 rounded">證據與草稿專屬 (雙校共用)</span>
         </h3>
         <div class="flex gap-2">
           <input type="file" accept=".csv" ref="tgTodoCsvInput" class="hidden" @change="handleTgTodoCsvImport">
@@ -82,7 +91,7 @@
               <span :class="['font-medium text-gray-800 whitespace-pre-wrap text-sm', {'line-through text-gray-500': item.is_completed}]">{{ item.content }}</span>
               
               <div v-if="item.url" class="flex flex-wrap gap-2 mt-1">
-                <a :href="getDownloadUrl(item.url)" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
+                <a :href="getDownloadUrl(item.url, item.content)" target="_blank" class="bg-indigo-500 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs font-bold shadow-sm transition-colors text-center">📥 立即串流下載</a>
                 <a :href="item.url" target="_blank" class="text-blue-600 hover:bg-blue-50 border border-blue-200 px-2 py-1 rounded text-xs font-bold transition-colors">🔗 TG 原文連結</a>
               </div>
             </div>
@@ -97,9 +106,30 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
+
+// ====== 🌟 分頁與 API 網址設定 ======
+const activeSchool = ref('SHJHS')
+
+// ⚠️ 請在這裡替換您為 GRJHS 新建立的 Hugging Face API 網址！
+const apiUrls = {
+  'SHJHS': 'https://lawxstudents168-tg-uploader-api.hf.space',
+  'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' // <-- 請將這裡改為您的 GRJHS Space 網址
+}
+
+const currentApiUrl = computed(() => apiUrls[activeSchool.value])
+
+// 切換學校時，自動清空底下的上傳表單，避免傳錯地方
+const switchSchool = (school) => {
+  activeSchool.value = school
+  selectedEvidenceFiles.value = []
+  tgEvidenceResults.value = []
+  evidenceUploadStatus.value = ''
+  tgEvidenceCaption.value = ''
+  if(tgEvidenceFileInput.value) tgEvidenceFileInput.value.value = ''
+}
 
 // ====== 共用工具 ======
 const copyToClipboard = async (text) => {
@@ -123,15 +153,20 @@ const parseCSVString = (str) => {
 
 onMounted(() => { loadTgTodos() })
 
-// ====== 🌟 下載連結轉換邏輯 ======
-// 將資料庫儲存的原始 TG 網址，轉換為 HF 伺服器的串流下載網址
-const getDownloadUrl = (url) => {
+// ====== 下載連結轉換邏輯 ======
+const getDownloadUrl = (url, content) => {
   if (!url) return '#'
   if (!url.includes('t.me/c/')) return url
   const parts = url.split('/')
   const messageId = parts[parts.length - 1]
-  // 注意：這裡對應的是 uploader 的 HF 網址
-  return `https://lawxstudents168-tg-uploader-api.hf.space/download/${messageId}`
+  
+  // 透過內容裡面的標籤判斷要向哪一個伺服器要檔案
+  let targetApi = apiUrls['SHJHS'] // 預設
+  if (content && content.includes('[證據-GRJHS]')) {
+    targetApi = apiUrls['GRJHS']
+  }
+  
+  return `${targetApi}/download/${messageId}`
 }
 
 // ====== 區塊 1：錄音證據批次保全 ======
@@ -139,7 +174,7 @@ const tgEvidenceTopicId = ref(''); const tgEvidenceCaption = ref(''); const isEv
 
 const selectEvidenceFiles = (e) => { 
   selectedEvidenceFiles.value = Array.from(e.target.files); 
-  evidenceUploadStatus.value = selectedEvidenceFiles.value.length ? `已選 ${selectedEvidenceFiles.value.length} 檔，準備保全` : ''; 
+  evidenceUploadStatus.value = selectedEvidenceFiles.value.length ? `已選 ${selectedEvidenceFiles.value.length} 檔，準備保全至 ${activeSchool.value}` : ''; 
   tgEvidenceResults.value = [] 
 }
 
@@ -151,20 +186,20 @@ const submitEvidenceBatchUpload = async () => {
     const file = selectedEvidenceFiles.value[i]; currentEvidenceUploadIndex.value = i + 1; evidenceUploadStatus.value = `保全上傳中 (${i+1}/${selectedEvidenceFiles.value.length})...`
     const fd = new FormData(); fd.append('file', file); fd.append('topic_id', tgEvidenceTopicId.value)
     
-    let cap = `📂 證據檔：${file.name}\n🕒 時間：${dayjs().format('YYYY/MM/DD HH:mm')}`; 
+    let cap = `📂 證據檔：${file.name}\n🏫 歸屬：${activeSchool.value}\n🕒 時間：${dayjs().format('YYYY/MM/DD HH:mm')}`; 
     if(tgEvidenceCaption.value) cap += `\n📝 說明：${tgEvidenceCaption.value}`; 
     fd.append('caption', cap)
     
     try {
-      // 🌟 已更新為全新的 HF 網址
-      const res = await fetch('https://lawxstudents168-tg-uploader-api.hf.space/upload/', { method: 'POST', body: fd })
+      // 🌟 自動根據選取的學校，發送到對應的 HF 伺服器
+      const res = await fetch(`${currentApiUrl.value}/upload/`, { method: 'POST', body: fd })
       if (!res.headers.get("content-type")?.includes("application/json")) throw new Error(`伺服器無回應或超時`)
       const data = await res.json()
       if (data.success) tgEvidenceResults.value.push(data)
     } catch (e) { hasError = true }
   }
   isEvidenceUploading.value = false; selectedEvidenceFiles.value = []; if(tgEvidenceFileInput.value) tgEvidenceFileInput.value.value = ''; tgEvidenceCaption.value = ''
-  evidenceUploadStatus.value = hasError ? (tgEvidenceResults.value.length ? '⚠️ 部分失敗' : '❌ 上傳失敗') : '✅ 批次保全完成'
+  evidenceUploadStatus.value = hasError ? (tgEvidenceResults.value.length ? '⚠️ 部分失敗' : '❌ 上傳失敗') : `✅ 批次保全完成 (${activeSchool.value})`
 }
 
 // ====== 區塊 2：TG 獨立暫存清單 (tg_todos) ======
@@ -172,8 +207,9 @@ const tgTodosList = ref([]); const tgTodoCsvInput = ref(null)
 const loadTgTodos = async () => { const { data } = await supabase.from('tg_todos').select('*').order('created_at', { ascending: false }); if(data) tgTodosList.value = data }
 
 const batchSaveToTgTodo = async () => {
-  for (const r of tgEvidenceResults.value) await supabase.from('tg_todos').insert([{ content: `[證據] ${r.filename}\n指紋: ${r.file_hash}`, url: r.telegram_link, is_completed: false }])
-  loadTgTodos(); alert('已加入暫存清單！')
+  // 🌟 在存入資料庫時，自動加上學校標籤 [證據-SHJHS] 或 [證據-GRJHS]
+  for (const r of tgEvidenceResults.value) await supabase.from('tg_todos').insert([{ content: `[證據-${activeSchool.value}] ${r.filename}\n指紋: ${r.file_hash}`, url: r.telegram_link, is_completed: false }])
+  loadTgTodos(); alert(`已將 ${activeSchool.value} 證據加入暫存清單！`)
 }
 const toggleTgTodo = async (t) => { await supabase.from('tg_todos').update({ is_completed: !t.is_completed }).eq('id', t.id); loadTgTodos() }
 const deleteTgTodo = async (id) => { if(confirm('刪除？')) { await supabase.from('tg_todos').delete().eq('id', id); loadTgTodos() } }
