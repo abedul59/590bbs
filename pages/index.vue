@@ -17,7 +17,7 @@
       
       <h4 class="font-bold text-blue-900 mb-2 text-lg relative z-10">📅 每日學習打卡系統</h4>
       <p class="text-sm text-blue-600 mb-4 relative z-10">
-        {{ isAutoWaking ? '🛸 系統正在自動校準與連線中...' : '✅ 今日系統狀態：各節點連線良好' }}
+        {{ isAutoWaking ? '🛸 系統正在自動校準與喚醒主機中...' : '✅ 今日系統狀態：各節點連線良好' }}
       </p>
       
       <button 
@@ -28,7 +28,7 @@
         <span v-if="isAutoWaking" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
         <span>{{ hasCheckedIn ? '🎉 你今日已成功簽到' : '✋ 點我進行學生簽到' }}</span>
       </button>
-      <p v-if="hasCheckedIn" class="text-[10px] text-blue-400 mt-3 relative z-10">系統已在背景完成保活喚醒任務</p>
+      <p v-if="hasCheckedIn" class="text-[10px] text-blue-400 mt-3 relative z-10">系統已在背景完成 Render 與 Vercel 的保活喚醒任務</p>
     </div>
 
     <div v-if="filteredBulletins.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
@@ -91,16 +91,9 @@ const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.p
 
 const activeCategory = ref('')
 
-// ====== 🌟 系統自動保活與喚醒邏輯 ======
+// ====== 🌟 系統自動保活與喚醒邏輯 (動態抓取 Render/Vercel 版) ======
 const hasCheckedIn = ref(false)
 const isAutoWaking = ref(false)
-
-// 填入所有您需要保持喚醒的 API 網址
-const serversToWakeUp = [
-  'https://lawxstudents168-tg-material-api.hf.space',
-  'https://lawxstudents168-tg-uploader-api.hf.space',
-  'https://lawxstudents168-tg-uploader-api-grjhs.hf.space'
-]
 
 const performSystemWakeup = async (actionType = 'auto_login') => {
   if (hasCheckedIn.value) return
@@ -112,14 +105,22 @@ const performSystemWakeup = async (actionType = 'auto_login') => {
       { action_type: actionType }
     ])
 
-    // 2. 背景喚醒所有設定的伺服器
-    await Promise.all(serversToWakeUp.map(url => 
-      fetch(`${url}/?_ping=${Date.now()}`, { 
-        method: 'GET', 
-        mode: 'no-cors',
-        cache: 'no-store'
-      }).catch(() => {}) 
-    ))
+    // 2. 🌟 動態去資料庫抓取您在後台設定的 Vercel 與 Render 網址
+    const { data: keepAliveUrls } = await supabase.from('keep_alive_urls').select('url')
+
+    // 3. 如果有網址，就背景並發戳醒它們
+    if (keepAliveUrls && keepAliveUrls.length > 0) {
+      await Promise.all(keepAliveUrls.map(item => {
+        if (!item.url) return Promise.resolve()
+        // 自動判斷網址有沒有問號，以正確附加 _ping 參數防止快取
+        const separator = item.url.includes('?') ? '&' : '?'
+        return fetch(`${item.url}${separator}_ping=${Date.now()}`, { 
+          method: 'GET', 
+          mode: 'no-cors',
+          cache: 'no-store'
+        }).catch(() => {}) 
+      }))
+    }
 
     hasCheckedIn.value = true
   } catch (error) {
@@ -153,19 +154,16 @@ const { data: categories } = await useAsyncData('categories', async () => {
   return data || []
 })
 
-// 預設選擇第一個分類
 if (categories.value && categories.value.length > 0) {
   activeCategory.value = categories.value[0].name
 }
 
-// 取得網站全域設定 (包含排序方式)
 const { data: settings } = await useAsyncData('site_settings', async () => {
   const { data } = await supabase.from('site_settings').select('*').eq('id', 1).single()
   return data
 })
 const sortOrder = computed(() => settings.value?.sort_order || 'newest')
 
-// 取得公告資料
 const { data: bulletins } = await useAsyncData('bulletins', async () => {
   const { data } = await supabase.from('bulletins').select('*')
   return data
@@ -175,7 +173,6 @@ const formatDate = (dateString) => {
   return dayjs(dateString).format('YYYY/MM/DD HH:mm')
 }
 
-// 過濾與動態排序邏輯
 const filteredBulletins = computed(() => {
   if (!bulletins.value) return []
   let filtered = bulletins.value.filter(b => b.category === activeCategory.value)
