@@ -34,7 +34,10 @@ const { data: settings } = await useAsyncData('settings', async () => {
 })
 
 onMounted(() => {
-  $fetch('/api/log-visitor', { method: 'POST' }).catch(() => {})
+  // 🌟 確保在全域背景自動呼叫來訪者紀錄 API
+  $fetch('/api/log-visitor', { method: 'POST' }).catch((err) => {
+    console.error('訪客紀錄背景寫入失敗:', err)
+  })
 })
 </script>
 
