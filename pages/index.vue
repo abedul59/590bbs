@@ -15,9 +15,9 @@
     <div class="mb-8 max-w-2xl mx-auto bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-2xl shadow-sm text-center flex flex-col items-center justify-center animate-fade-in relative overflow-hidden">
       <div class="absolute top-0 right-0 -mt-4 -mr-4 text-blue-200 opacity-30 text-8xl pointer-events-none">✨</div>
       
-      <h4 class="font-bold text-blue-900 mb-2 text-lg relative z-10">📅 每日學習打卡系統</h4>
+      <h4 class="font-bold text-blue-900 mb-2 text-lg relative z-10">📅 每日學習打卡</h4>
       <p class="text-sm text-blue-600 mb-4 relative z-10">
-        {{ isAutoWaking ? '🛸 系統正在自動校準與喚醒主機中...' : '✅ 今日系統狀態：各節點連線良好' }}
+        記錄你的每一天，保持學習好習慣！
       </p>
       
       <button 
@@ -25,10 +25,8 @@
         :disabled="hasCheckedIn"
         class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-full shadow-md transition-all transform hover:scale-105 disabled:opacity-80 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2 relative z-10"
       >
-        <span v-if="isAutoWaking" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
         <span>{{ hasCheckedIn ? '🎉 你今日已成功簽到' : '✋ 點我進行學生簽到' }}</span>
       </button>
-      <p v-if="hasCheckedIn" class="text-[10px] text-blue-400 mt-3 relative z-10">系統已在背景完成 Render 與 Vercel 的保活喚醒任務</p>
     </div>
 
     <div v-if="filteredBulletins.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
@@ -91,49 +89,48 @@ const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.p
 
 const activeCategory = ref('')
 
-// ====== 🌟 系統自動保活與喚醒邏輯 (動態抓取 Render/Vercel 版) ======
+// ====== 🌟 極速背景打卡與保活邏輯 ======
 const hasCheckedIn = ref(false)
-const isAutoWaking = ref(false)
 
-const performSystemWakeup = async (actionType = 'auto_login') => {
+const performSystemBackgroundTasks = (actionType = 'auto_login') => {
   if (hasCheckedIn.value) return
   
-  isAutoWaking.value = true
-  try {
-    // 1. 寫入 Supabase (維持資料庫活躍，避免 7 天被暫停)
-    await supabase.from('system_keepalive_logs').insert([
-      { action_type: actionType }
-    ])
+  // 1. UI 瞬間反應：不讓學生等待，直接將按鈕設為已打卡
+  hasCheckedIn.value = true
 
-    // 2. 🌟 動態去資料庫抓取您在後台設定的 Vercel 與 Render 網址
-    const { data: keepAliveUrls } = await supabase.from('keep_alive_urls').select('url')
+  // 2. 把繁重的網路請求丟進背景執行 (Fire and forget)，不阻塞畫面
+  setTimeout(async () => {
+    try {
+      // 寫入 Supabase (學生打卡紀錄)
+      await supabase.from('system_keepalive_logs').insert([
+        { action_type: actionType }
+      ])
 
-    // 3. 如果有網址，就背景並發戳醒它們
-    if (keepAliveUrls && keepAliveUrls.length > 0) {
-      await Promise.all(keepAliveUrls.map(item => {
-        if (!item.url) return Promise.resolve()
-        // 自動判斷網址有沒有問號，以正確附加 _ping 參數防止快取
-        const separator = item.url.includes('?') ? '&' : '?'
-        return fetch(`${item.url}${separator}_ping=${Date.now()}`, { 
-          method: 'GET', 
-          mode: 'no-cors',
-          cache: 'no-store'
-        }).catch(() => {}) 
-      }))
+      // 動態去資料庫抓取 Vercel 與 Render 網址
+      const { data: keepAliveUrls } = await supabase.from('keep_alive_urls').select('url')
+
+      // 背景並發戳醒它們，不等待結果
+      if (keepAliveUrls && keepAliveUrls.length > 0) {
+        keepAliveUrls.forEach(item => {
+          if (!item.url) return
+          const separator = item.url.includes('?') ? '&' : '?'
+          fetch(`${item.url}${separator}_ping=${Date.now()}`, { 
+            method: 'GET', 
+            mode: 'no-cors',
+            cache: 'no-store'
+          }).catch(() => {}) 
+        })
+      }
+    } catch (error) {
+      console.error('背景打卡作業失敗', error)
     }
-
-    hasCheckedIn.value = true
-  } catch (error) {
-    console.error('背景喚醒作業失敗', error)
-  } finally {
-    isAutoWaking.value = false
-  }
+  }, 0)
 }
 
-// 網頁載入後，自動延遲 1 秒執行被動喚醒
+// 網頁載入後，自動延遲 1 秒執行背景打卡
 onMounted(() => {
   setTimeout(() => {
-    performSystemWakeup('auto_visitor_wakeup')
+    performSystemBackgroundTasks('auto_visitor_wakeup')
   }, 1000)
 })
 
@@ -143,7 +140,7 @@ const manualCheckIn = () => {
     alert('🎉 你今日已經完成簽到囉！繼續保持！')
     return
   }
-  performSystemWakeup('manual_student_checkin')
+  performSystemBackgroundTasks('manual_student_checkin')
   alert('🎉 簽到成功！你今日成功打卡了！')
 }
 // ==========================================
