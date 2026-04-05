@@ -121,6 +121,36 @@
         </div>
       </div>
     </section>
+
+    <section class="mt-8 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+      <div class="bg-gray-50 px-5 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="font-bold text-gray-700">🕵️‍♂️ 近期網站來訪者紀錄</h3>
+        <button @click="fetchVisitorLogs" class="text-xs bg-white border border-gray-300 text-gray-600 px-3 py-1.5 rounded hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-1">
+          <span>🔄</span> 重新整理
+        </button>
+      </div>
+      <div class="overflow-x-auto overflow-y-auto flex-1 p-0">
+        <table class="w-full text-left text-sm text-gray-600">
+          <thead class="bg-white sticky top-0 shadow-sm z-10">
+            <tr>
+              <th class="px-5 py-3 font-semibold text-gray-800 whitespace-nowrap">造訪時間</th>
+              <th class="px-5 py-3 font-semibold text-gray-800 whitespace-nowrap">IP 位址</th>
+              <th class="px-5 py-3 font-semibold text-gray-800">設備 / 瀏覽器特徵 (User Agent)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr v-for="log in visitorLogs" :key="log.id" class="hover:bg-gray-50 transition-colors">
+              <td class="px-5 py-3 whitespace-nowrap font-mono text-xs">{{ formatDate(log.created_at) }}</td>
+              <td class="px-5 py-3 font-mono text-xs text-blue-600 font-bold">{{ log.ip_address || '未知 IP' }}</td>
+              <td class="px-5 py-3 text-xs text-gray-500 break-all">{{ log.user_agent || '未知設備' }}</td>
+            </tr>
+            <tr v-if="visitorLogs.length === 0">
+              <td colspan="3" class="px-5 py-10 text-center text-gray-400">尚無來訪者紀錄</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -128,6 +158,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
 const supabase = useSupabaseClient()
+const dayjs = useDayjs() // 引入 dayjs 來格式化時間
 const currentTheme = useState('currentTheme')
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
 
@@ -138,8 +169,14 @@ const showRenderToast = ref(false)
 const vercelUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Vercel' || !item.platform))
 const renderUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Render'))
 
+// 🌟 新增：來訪者紀錄狀態
+const visitorLogs = ref([])
+
 onMounted(() => {
-  loadSettings(); loadPostCategories(); loadKeepAliveUrls()
+  loadSettings(); 
+  loadPostCategories(); 
+  loadKeepAliveUrls();
+  fetchVisitorLogs(); // 元件掛載時抓取紀錄
 })
 
 const loadSettings = async () => {
@@ -190,6 +227,23 @@ const pingUrlsByPlatform = async (platform) => {
   }
   isPinging.value = false; isPingingPlatform.value = ''; pingResult.value = `${platform} 喚醒完成！成功發送 ${successCount}/${targetUrls.length} 個請求。`; setTimeout(() => { pingResult.value = '' }, 4000)
   if (platform === 'Render') { setTimeout(() => { showRenderToast.value = true; setTimeout(() => { showRenderToast.value = false }, 10000) }, 60000) }
+}
+
+// 🌟 恢復：載入與格式化來訪者紀錄
+const fetchVisitorLogs = async () => {
+  const { data, error } = await supabase
+    .from('visitor_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(100)
+    
+  if (data) {
+    visitorLogs.value = data
+  }
+}
+
+const formatDate = (date) => {
+  return dayjs(date).format('YYYY/MM/DD HH:mm:ss')
 }
 </script>
 <style scoped>
