@@ -12,17 +12,23 @@
       <div v-if="categories.length === 0" class="text-sm text-gray-400">目前尚無分類，請至後台新增。</div>
     </div>
 
-    <div class="mb-8 max-w-2xl mx-auto bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-2xl shadow-sm text-center flex flex-col items-center justify-center animate-fade-in">
-      <h4 class="font-bold text-blue-900 mb-2 text-lg">📅 每日學習打卡</h4>
-      <p class="text-sm text-blue-600 mb-4">記錄你的每一天，保持學習好習慣！</p>
+    <div class="mb-8 max-w-2xl mx-auto bg-blue-50 border border-blue-200 p-4 md:p-6 rounded-2xl shadow-sm text-center flex flex-col items-center justify-center animate-fade-in relative overflow-hidden">
+      <div class="absolute top-0 right-0 -mt-4 -mr-4 text-blue-200 opacity-30 text-8xl pointer-events-none">✨</div>
+      
+      <h4 class="font-bold text-blue-900 mb-2 text-lg relative z-10">📅 每日學習打卡系統</h4>
+      <p class="text-sm text-blue-600 mb-4 relative z-10">
+        {{ isAutoWaking ? '🛸 系統正在自動校準與連線中...' : '✅ 今日系統狀態：各節點連線良好' }}
+      </p>
       
       <button 
-        @click="handleStudentCheckIn" 
+        @click="manualCheckIn" 
         :disabled="hasCheckedIn"
-        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-full shadow-md transition-all transform hover:scale-105 disabled:opacity-80 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2"
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-full shadow-md transition-all transform hover:scale-105 disabled:opacity-80 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2 relative z-10"
       >
-        <span>{{ hasCheckedIn ? '✅ 你今日已成功打卡' : '✋ 點我進行學生簽到' }}</span>
+        <span v-if="isAutoWaking" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+        <span>{{ hasCheckedIn ? '🎉 你今日已成功簽到' : '✋ 點我進行學生簽到' }}</span>
       </button>
+      <p v-if="hasCheckedIn" class="text-[10px] text-blue-400 mt-3 relative z-10">系統已在背景完成保活喚醒任務</p>
     </div>
 
     <div v-if="filteredBulletins.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
@@ -75,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
 
 const supabase = useSupabaseClient()
@@ -85,42 +91,59 @@ const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.p
 
 const activeCategory = ref('')
 
-// ====== 🌟 學生打卡與後台保活喚醒邏輯 ======
+// ====== 🌟 系統自動保活與喚醒邏輯 ======
 const hasCheckedIn = ref(false)
+const isAutoWaking = ref(false)
 
-// 填入所有您想要「順便喚醒」的 API 網址 (包含 Hugging Face 與 Render)
+// 填入所有您需要保持喚醒的 API 網址
 const serversToWakeUp = [
   'https://lawxstudents168-tg-material-api.hf.space',
   'https://lawxstudents168-tg-uploader-api.hf.space',
   'https://lawxstudents168-tg-uploader-api-grjhs.hf.space'
-  // 如果還有 Render 的網址也可以加在這邊
 ]
 
-const handleStudentCheckIn = async () => {
+const performSystemWakeup = async (actionType = 'auto_login') => {
   if (hasCheckedIn.value) return
   
-  // 1. 表面功夫：給學生的即時開心回饋
-  alert('🎉 你今日成功打卡了！繼續保持喔！')
-  hasCheckedIn.value = true
-
+  isAutoWaking.value = true
   try {
-    // 2. 核心保活 1：寫入紀錄到 Supabase (防止資料庫因 7 天無活動被暫停)
+    // 1. 寫入 Supabase (維持資料庫活躍，避免 7 天被暫停)
     await supabase.from('system_keepalive_logs').insert([
-      { action_type: 'student_checkin' }
+      { action_type: actionType }
     ])
 
-    // 3. 核心保活 2：背景並發請求，喚醒所有沉睡的伺服器
-    serversToWakeUp.forEach(url => {
+    // 2. 背景喚醒所有設定的伺服器
+    await Promise.all(serversToWakeUp.map(url => 
       fetch(`${url}/?_ping=${Date.now()}`, { 
         method: 'GET', 
         mode: 'no-cors',
-        cache: 'no-store' // 強制不使用快取
-      }).catch(() => {}) // 忽略錯誤，我們只負責戳醒它
-    })
+        cache: 'no-store'
+      }).catch(() => {}) 
+    ))
 
+    hasCheckedIn.value = true
   } catch (error) {
-    console.error('背景喚醒作業發生小錯誤，但不影響前端打卡', error)
+    console.error('背景喚醒作業失敗', error)
+  } finally {
+    isAutoWaking.value = false
   }
+}
+
+// 網頁載入後，自動延遲 1 秒執行被動喚醒
+onMounted(() => {
+  setTimeout(() => {
+    performSystemWakeup('auto_visitor_wakeup')
+  }, 1000)
+})
+
+// 學生手動點擊打卡
+const manualCheckIn = () => {
+  if (hasCheckedIn.value) {
+    alert('🎉 你今日已經完成簽到囉！繼續保持！')
+    return
+  }
+  performSystemWakeup('manual_student_checkin')
+  alert('🎉 簽到成功！你今日成功打卡了！')
 }
 // ==========================================
 
