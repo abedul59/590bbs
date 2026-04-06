@@ -140,7 +140,7 @@
           </thead>
           <tbody class="divide-y divide-gray-100">
             <tr v-for="log in visitorLogs" :key="log.id" class="hover:bg-gray-50 transition-colors">
-              <td class="px-5 py-3 whitespace-nowrap font-mono text-xs">{{ formatDate(log.created_at) }}</td>
+              <td class="px-5 py-3 whitespace-nowrap font-mono text-xs">{{ formatDate(log.visited_at) }}</td>
               <td class="px-5 py-3 font-mono text-xs text-blue-600 font-bold">{{ log.ip_address || '未知 IP' }}</td>
               <td class="px-5 py-3 text-xs text-gray-500 break-all">{{ log.user_agent || '未知設備' }}</td>
             </tr>
@@ -169,7 +169,7 @@ const showRenderToast = ref(false)
 const vercelUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Vercel' || !item.platform))
 const renderUrls = computed(() => keepAliveUrls.value.filter(item => item.platform === 'Render'))
 
-// 🌟 新增：來訪者紀錄狀態
+// 來訪者紀錄狀態
 const visitorLogs = ref([])
 
 onMounted(() => {
@@ -229,12 +229,12 @@ const pingUrlsByPlatform = async (platform) => {
   if (platform === 'Render') { setTimeout(() => { showRenderToast.value = true; setTimeout(() => { showRenderToast.value = false }, 10000) }, 60000) }
 }
 
-// 🌟 恢復：載入與格式化來訪者紀錄
+// 🌟 修正：對齊資料庫真實的時間欄位名稱 visited_at
 const fetchVisitorLogs = async () => {
   const { data, error } = await supabase
     .from('visitor_logs')
     .select('*')
-    .order('created_at', { ascending: false })
+    .order('visited_at', { ascending: false }) // 👉 這裡已經改為 visited_at
     .limit(100)
     
   if (data) {
@@ -243,9 +243,11 @@ const fetchVisitorLogs = async () => {
 }
 
 const formatDate = (date) => {
+  if (!date) return '未知時間'
   return dayjs(date).format('YYYY/MM/DD HH:mm:ss')
 }
 </script>
+
 <style scoped>
 .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
