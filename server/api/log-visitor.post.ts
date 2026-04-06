@@ -1,28 +1,28 @@
 import { serverSupabaseClient } from '#supabase/server'
 
 export default defineEventHandler(async (event) => {
-  // 1. 取得來訪者 IP (Nitro 內建支援 Vercel 等平台的 x-forwarded-for 標頭)
-  const ip = getRequestIP(event, { xForwardedFor: true }) || '未知 IP'
-  
-  // 2. 取得設備資訊 (User-Agent)
-  const userAgent = getHeader(event, 'user-agent') || '未知設備'
-
   try {
-    // 3. 取得 Supabase 客戶端並寫入資料庫
+    // 取得 Supabase 連線
     const supabase = await serverSupabaseClient(event)
     
+    // 取得使用者的真實 IP 與設備資訊 (相容 Vercel 的 headers)
+    const headers = getRequestHeaders(event)
+    const ip = headers['x-forwarded-for'] || headers['x-real-ip'] || '無法取得 IP'
+    const userAgent = headers['user-agent'] || '未知設備'
+
+    // 寫入到我們剛剛確認好的資料庫表格中
     const { error } = await supabase.from('visitor_logs').insert([
-      { 
-        ip_address: ip, 
-        user_agent: userAgent 
-      }
+      { ip_address: ip, user_agent: userAgent }
     ])
 
-    if (error) throw error
+    if (error) {
+      console.error('寫入訪客紀錄失敗:', error)
+      return { success: false, error: error.message }
+    }
 
-    return { success: true, message: '紀錄成功' }
-  } catch (err) {
-    console.error('寫入來訪紀錄失敗:', err)
-    return { success: false, message: '紀錄失敗' }
+    return { success: true }
+  } catch (error: any) {
+    console.error('伺服器 API 錯誤:', error)
+    return { success: false, error: error.message || '伺服器錯誤' }
   }
 })
