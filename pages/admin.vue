@@ -43,6 +43,8 @@
         <button @click="activeTab = 'AdminCheckins'" :class="activeTab === 'AdminCheckins' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'" class="flex-1 md:flex-none px-4 py-2.5 rounded-lg font-bold text-sm transition-all duration-200">
           📅 打卡與喚醒紀錄
         </button>
+
+        <button @click="activeTab = 'AdminCron'">⏰ 定時排程</button>
       </div>
 
       <div class="bg-gray-50/50 flex-1 rounded-xl">
@@ -52,6 +54,7 @@
         <AdminPrivate v-if="activeTab === 'AdminPrivate'" />
         <AdminPublic v-if="activeTab === 'AdminPublic'" />
         <AdminCheckins v-if="activeTab === 'AdminCheckins'" />
+        <AdminCron v-if="activeTab === 'AdminCron'" />
       </div>
 
     </div>
