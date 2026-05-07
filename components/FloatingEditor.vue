@@ -49,10 +49,21 @@
       </div>
 
       <div class="bg-gray-50 p-2 border-b border-gray-200 flex flex-wrap items-center gap-1">
-        <button @mousedown.prevent @click="exec('bold')" class="p-1.5 hover:bg-gray-200 rounded font-bold w-8 text-black" title="粗體">B</button>
-        <button @mousedown.prevent @click="exec('italic')" class="p-1.5 hover:bg-gray-200 rounded italic w-8 font-serif text-black" title="斜體">I</button>
         
-        <button @mousedown.prevent @click="exec('insertOrderedList')" class="p-1.5 hover:bg-gray-200 rounded font-bold flex items-center justify-center gap-1 px-2 border border-gray-200 bg-white shadow-sm ml-1 text-black" title="數字編號">
+        <button 
+          @mousedown.prevent @click="exec('bold')" 
+          :class="[activeStates.bold ? 'bg-gray-300 shadow-inner border-gray-400' : 'bg-white hover:bg-gray-200 border-transparent', 'p-1.5 rounded font-bold w-8 text-black border transition-all']" 
+          title="粗體">B</button>
+          
+        <button 
+          @mousedown.prevent @click="exec('italic')" 
+          :class="[activeStates.italic ? 'bg-gray-300 shadow-inner border-gray-400' : 'bg-white hover:bg-gray-200 border-transparent', 'p-1.5 rounded italic w-8 font-serif text-black border transition-all']" 
+          title="斜體">I</button>
+        
+        <button 
+          @mousedown.prevent @click="exec('insertOrderedList')" 
+          :class="[activeStates.orderedList ? 'bg-gray-300 shadow-inner border-gray-400' : 'bg-white hover:bg-gray-200 border-gray-200', 'p-1.5 rounded font-bold flex items-center justify-center gap-1 px-2 border shadow-sm ml-1 text-black transition-all']" 
+          title="數字編號">
           <span class="text-[10px] leading-tight text-left">1.<br>2.</span>
           <span class="text-xs">編號</span>
         </button>
@@ -86,6 +97,9 @@
           'p-6 overflow-y-auto focus:outline-none prose max-w-none text-gray-800 leading-relaxed editor-content',
           isFullscreen ? 'flex-1 text-xl lg:text-2xl' : 'min-h-[300px] flex-1 text-sm'
         ]"
+        @input="onInput"
+        @keyup="checkFormatting"
+        @mouseup="checkFormatting"
       ></div>
       
       <div class="bg-gray-50 px-4 py-2 text-[10px] text-gray-400 flex justify-between border-t border-gray-200 mt-auto">
@@ -112,13 +126,26 @@ const lastUpdated = ref('--')
 const notesList = ref([])
 const currentNoteId = ref(null)
 
-// 🌟 修正：優化執行邏輯，不再強制重置 focus 導致狀態消失
+// 🌟 記錄目前游標所在的格式狀態
+const activeStates = ref({
+  bold: false,
+  italic: false,
+  orderedList: false
+})
+
+// 🌟 檢查格式狀態，用來更新按鈕外觀
+const checkFormatting = () => {
+  if (!editorRef.value) return
+  activeStates.value.bold = document.queryCommandState('bold')
+  activeStates.value.italic = document.queryCommandState('italic')
+  activeStates.value.orderedList = document.queryCommandState('insertOrderedList')
+}
+
+// 🌟 修改執行函式：強制鎖定焦點後再執行，並立即檢查格式
 const exec = (command, value = null) => {
-  // 如果點擊工具列前，編輯器完全沒有被點擊過，先給予焦點
-  if (document.activeElement !== editorRef.value) {
-    editorRef.value.focus()
-  }
+  editorRef.value.focus() // 絕對鎖定焦點
   document.execCommand(command, false, value)
+  checkFormatting() // 點擊後立即更新按鈕的「凹下去」狀態
 }
 
 const toggleTrigger = () => {
@@ -172,6 +199,7 @@ const renderCurrentNote = async () => {
     await nextTick()
     if (editorRef.value) {
       editorRef.value.innerHTML = currentNote.content || ''
+      checkFormatting() // 載入內容時也檢查一次狀態
     }
   }
 }
@@ -222,13 +250,17 @@ const saveContent = async () => {
   }
   isSaving.value = false
 }
+
+const onInput = () => {
+  checkFormatting() // 打字時也檢查格式
+}
 </script>
 
 <style scoped>
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
-/* 🌟 強制覆蓋 Tailwind 的暴力預設樣式，確保粗斜體與編號絕對有效 */
+/* 強制覆蓋 Tailwind 的預設樣式，確保粗斜體與編號絕對有效 */
 .editor-content b, .editor-content strong {
   font-weight: 900 !important;
 }
