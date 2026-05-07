@@ -49,17 +49,17 @@
       </div>
 
       <div class="bg-gray-50 p-2 border-b border-gray-200 flex flex-wrap items-center gap-1">
-        <button @mousedown.prevent="exec('bold')" class="p-1.5 hover:bg-gray-200 rounded font-bold w-8" title="粗體">B</button>
-        <button @mousedown.prevent="exec('italic')" class="p-1.5 hover:bg-gray-200 rounded italic w-8 font-serif" title="斜體">I</button>
+        <button @mousedown.prevent @click="exec('bold')" class="p-1.5 hover:bg-gray-200 rounded font-bold w-8 text-black" title="粗體">B</button>
+        <button @mousedown.prevent @click="exec('italic')" class="p-1.5 hover:bg-gray-200 rounded italic w-8 font-serif text-black" title="斜體">I</button>
         
-        <button @mousedown.prevent="exec('insertOrderedList')" class="p-1.5 hover:bg-gray-200 rounded font-bold flex items-center justify-center gap-1 px-2 border border-gray-200 bg-white shadow-sm ml-1" title="數字編號">
+        <button @mousedown.prevent @click="exec('insertOrderedList')" class="p-1.5 hover:bg-gray-200 rounded font-bold flex items-center justify-center gap-1 px-2 border border-gray-200 bg-white shadow-sm ml-1 text-black" title="數字編號">
           <span class="text-[10px] leading-tight text-left">1.<br>2.</span>
           <span class="text-xs">編號</span>
         </button>
 
         <span class="text-gray-300 mx-1">|</span>
 
-        <select @change="exec('fontSize', $event.target.value)" class="text-xs border border-gray-300 rounded p-1.5 bg-white shadow-sm focus:outline-none">
+        <select @change="exec('fontSize', $event.target.value)" class="text-xs border border-gray-300 rounded p-1.5 bg-white shadow-sm focus:outline-none text-black">
           <option value="3">中字體</option>
           <option value="1">小字體</option>
           <option value="5">大字體</option>
@@ -83,10 +83,9 @@
         ref="editorRef"
         contenteditable="true" 
         :class="[
-          'p-6 overflow-y-auto focus:outline-none prose max-w-none text-gray-800 leading-relaxed',
+          'p-6 overflow-y-auto focus:outline-none prose max-w-none text-gray-800 leading-relaxed editor-content',
           isFullscreen ? 'flex-1 text-xl lg:text-2xl' : 'min-h-[300px] flex-1 text-sm'
         ]"
-        @input="onInput"
       ></div>
       
       <div class="bg-gray-50 px-4 py-2 text-[10px] text-gray-400 flex justify-between border-t border-gray-200 mt-auto">
@@ -110,14 +109,16 @@ const editorRef = ref(null)
 const isSaving = ref(false)
 const lastUpdated = ref('--')
 
-// 多檔筆記狀態
 const notesList = ref([])
 const currentNoteId = ref(null)
 
-// 功能列執行命令
+// 🌟 修正：優化執行邏輯，不再強制重置 focus 導致狀態消失
 const exec = (command, value = null) => {
+  // 如果點擊工具列前，編輯器完全沒有被點擊過，先給予焦點
+  if (document.activeElement !== editorRef.value) {
+    editorRef.value.focus()
+  }
   document.execCommand(command, false, value)
-  if (editorRef.value) editorRef.value.focus()
 }
 
 const toggleTrigger = () => {
@@ -145,7 +146,6 @@ const verifyPassword = async () => {
   }
 }
 
-// 載入所有筆記分類
 const loadNotes = async () => {
   const { data } = await supabase.from('system_scratchpad').select('*').order('updated_at', { ascending: false })
   
@@ -158,16 +158,13 @@ const loadNotes = async () => {
     await createNewNote(true, '預設便籤')
     return 
   }
-  
   await renderCurrentNote()
 }
 
-// 切換筆記
 const switchNote = async () => {
   await renderCurrentNote()
 }
 
-// 渲染當前筆記內容到編輯器
 const renderCurrentNote = async () => {
   const currentNote = notesList.value.find(n => n.id === currentNoteId.value)
   if (currentNote) {
@@ -179,7 +176,6 @@ const renderCurrentNote = async () => {
   }
 }
 
-// 建立新筆記
 const createNewNote = async (isAutoInit = false, autoTitle = '') => {
   let title = autoTitle
   if (!isAutoInit) {
@@ -197,7 +193,6 @@ const createNewNote = async (isAutoInit = false, autoTitle = '') => {
   }
 }
 
-// 刪除筆記
 const deleteNote = async () => {
   if (notesList.value.length <= 1) {
     alert('至少需要保留一份紀錄喔！您可以把內容刪除清空即可。')
@@ -210,7 +205,6 @@ const deleteNote = async () => {
   }
 }
 
-// 儲存內容
 const saveContent = async () => {
   if (!currentNoteId.value) return
   isSaving.value = true
@@ -228,30 +222,33 @@ const saveContent = async () => {
   }
   isSaving.value = false
 }
-
-const onInput = () => {
-  // 防抖動自動存檔邏輯預留區
-}
 </script>
 
 <style scoped>
 .animate-fade-in { animation: fadeIn 0.2s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 
-/* 優化編輯器內的清單樣式 */
-.prose ol {
-  list-style-type: decimal;
-  padding-left: 1.5rem;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
+/* 🌟 強制覆蓋 Tailwind 的暴力預設樣式，確保粗斜體與編號絕對有效 */
+.editor-content b, .editor-content strong {
+  font-weight: 900 !important;
 }
-.prose ul {
-  list-style-type: disc;
-  padding-left: 1.5rem;
-  margin-top: 0.5rem;
-  margin-bottom: 0.5rem;
+.editor-content i, .editor-content em {
+  font-style: italic !important;
 }
-.prose li {
-  margin-bottom: 0.25rem;
+.editor-content ol {
+  list-style-type: decimal !important;
+  padding-left: 2.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.editor-content ul {
+  list-style-type: disc !important;
+  padding-left: 2.5rem !important;
+  margin-top: 0.5rem !important;
+  margin-bottom: 0.5rem !important;
+}
+.editor-content li {
+  display: list-item !important;
+  margin-bottom: 0.25rem !important;
 }
 </style>
