@@ -14,6 +14,8 @@
     <main class="container mx-auto p-4 max-w-4xl">
       <NuxtPage />
     </main>
+
+    <FloatingEditor />
   </div>
 </template>
 
@@ -27,6 +29,7 @@ const supabase = useSupabaseClient()
 const currentTheme = useState('currentTheme', () => 'purple')
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
 
+// 載入網站全域設定
 const { data: settings } = await useAsyncData('settings', async () => {
   const { data } = await supabase.from('site_settings').select('*').eq('id', 1).single()
   if (data?.theme) currentTheme.value = data.theme // 從資料庫讀取主題
@@ -34,7 +37,7 @@ const { data: settings } = await useAsyncData('settings', async () => {
 })
 
 onMounted(() => {
-  // 🌟 確保在全域背景自動呼叫來訪者紀錄 API
+  // 背景自動呼叫來訪者紀錄 API
   $fetch('/api/log-visitor', { method: 'POST' }).catch((err) => {
     console.error('訪客紀錄背景寫入失敗:', err)
   })
