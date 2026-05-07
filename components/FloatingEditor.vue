@@ -49,10 +49,10 @@
       </div>
 
       <div class="bg-gray-50 p-2 border-b border-gray-200 flex flex-wrap items-center gap-1">
-        <button @click="exec('bold')" class="p-1.5 hover:bg-gray-200 rounded font-bold w-8" title="粗體">B</button>
-        <button @click="exec('italic')" class="p-1.5 hover:bg-gray-200 rounded italic w-8 font-serif" title="斜體">I</button>
+        <button @mousedown.prevent="exec('bold')" class="p-1.5 hover:bg-gray-200 rounded font-bold w-8" title="粗體">B</button>
+        <button @mousedown.prevent="exec('italic')" class="p-1.5 hover:bg-gray-200 rounded italic w-8 font-serif" title="斜體">I</button>
         
-        <button @click="exec('insertOrderedList')" class="p-1.5 hover:bg-gray-200 rounded font-bold flex items-center justify-center gap-1 px-2 border border-gray-200 bg-white shadow-sm ml-1" title="數字編號">
+        <button @mousedown.prevent="exec('insertOrderedList')" class="p-1.5 hover:bg-gray-200 rounded font-bold flex items-center justify-center gap-1 px-2 border border-gray-200 bg-white shadow-sm ml-1" title="數字編號">
           <span class="text-[10px] leading-tight text-left">1.<br>2.</span>
           <span class="text-xs">編號</span>
         </button>
@@ -98,7 +98,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, nextTick } from 'vue'
+
 const supabase = useSupabaseClient()
 
 const isOpen = ref(false)
@@ -116,15 +117,14 @@ const currentNoteId = ref(null)
 // 功能列執行命令
 const exec = (command, value = null) => {
   document.execCommand(command, false, value)
-  // 若使用清單或字體，強制讓編輯器保持焦點
   if (editorRef.value) editorRef.value.focus()
 }
 
 const toggleTrigger = () => {
   isOpen.value = !isOpen.value
   if (!isOpen.value) {
-    isVerified.value = false // 關閉後重置驗證狀態
-    isFullscreen.value = false // 關閉時退出全螢幕
+    isVerified.value = false
+    isFullscreen.value = false
     inputPass.value = ''
   }
 }
@@ -151,12 +151,10 @@ const loadNotes = async () => {
   
   if (data && data.length > 0) {
     notesList.value = data
-    // 如果沒有選擇特定筆記，預設選擇第一筆
     if (!currentNoteId.value || !notesList.value.find(n => n.id === currentNoteId.value)) {
       currentNoteId.value = data[0].id
     }
   } else {
-    // 如果資料庫全空，自動建立一個預設便籤
     await createNewNote(true, '預設便籤')
     return 
   }
@@ -186,7 +184,7 @@ const createNewNote = async (isAutoInit = false, autoTitle = '') => {
   let title = autoTitle
   if (!isAutoInit) {
     title = prompt('請輸入新分類的名稱：', '新紀錄')
-    if (!title) return // 取消就不建立
+    if (!title) return
   }
 
   const { data, error } = await supabase.from('system_scratchpad').insert([
@@ -202,12 +200,12 @@ const createNewNote = async (isAutoInit = false, autoTitle = '') => {
 // 刪除筆記
 const deleteNote = async () => {
   if (notesList.value.length <= 1) {
-    alert('至少需要保留一份紀錄喔！您可以把內容清空即可。')
+    alert('至少需要保留一份紀錄喔！您可以把內容刪除清空即可。')
     return
   }
   if (confirm('確定要刪除這份紀錄嗎？')) {
     await supabase.from('system_scratchpad').delete().eq('id', currentNoteId.value)
-    currentNoteId.value = null // 清空選擇，讓系統自動選第一筆
+    currentNoteId.value = null
     await loadNotes()
   }
 }
@@ -225,7 +223,6 @@ const saveContent = async () => {
   
   if (!error) {
     lastUpdated.value = new Date().toLocaleString()
-    // 悄悄更新列表裡的狀態，避免切換時內容消失
     const noteIndex = notesList.value.findIndex(n => n.id === currentNoteId.value)
     if (noteIndex !== -1) notesList.value[noteIndex].content = html
   }
@@ -233,7 +230,7 @@ const saveContent = async () => {
 }
 
 const onInput = () => {
-  // 可以在此加入防抖動 (debounce) 的自動存檔邏輯
+  // 防抖動自動存檔邏輯預留區
 }
 </script>
 
