@@ -8,13 +8,13 @@
 
     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm text-indigo-800 text-sm">
       <p class="font-bold mb-1">💡 運作原理：</p>
-      <p>設定好時間後，Hugging Face 上的 Python 定時機器人會在這幾個特定的時間點，自動前往「系統設定」抓取您設定好的 Vercel 與 Render 網址，並在背景執行喚醒任務。</p>
+      <p>Render 免費服務運行時，會每分鐘檢查台灣時間的排程。cron-job.org 應每小時呼叫服務的 /run 網址，讓冷啟動完成後立即檢查；服務恢復時會補處理最近 65 分鐘內尚未記錄的排程。執行可能延後約一小時加上冷啟動時間，超過補跑範圍仍可能漏跑。實際結果請查看 Render 服務紀錄。</p>
     </div>
 
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <div class="flex flex-col md:flex-row gap-3 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-200 items-end">
         <div class="flex-1">
-          <label class="block text-sm font-bold text-gray-700 mb-1">設定每日喚醒時間 (24小時制)</label>
+          <label class="block text-sm font-bold text-gray-700 mb-1">設定每日喚醒時間 (台灣時間，24小時制)</label>
           <input v-model="newTime" type="time" class="border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white">
         </div>
         <button @click="addSchedule" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded font-bold shadow-sm transition-colors">
@@ -35,7 +35,7 @@
             <td class="px-5 py-3 font-mono font-bold text-lg text-indigo-700">{{ item.time_str }}</td>
             <td class="px-5 py-3 text-center">
               <button @click="toggleStatus(item)" :class="item.is_active ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'" class="px-3 py-1 text-xs font-bold rounded-full border shadow-sm transition-colors">
-                {{ item.is_active ? '✅ 執行中' : '⏸️ 已暫停' }}
+                {{ item.is_active ? '✅ 已啟用' : '⏸️ 已暫停' }}
               </button>
             </td>
             <td class="px-5 py-3 text-right">

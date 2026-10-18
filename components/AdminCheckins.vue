@@ -61,12 +61,12 @@
             <div class="flex items-center gap-3">
               <span class="text-2xl bg-gray-100 p-2 rounded-full">👤</span>
               <div>
-                <p class="text-sm font-bold text-gray-800">熱心學生打卡</p>
+                <p class="text-sm font-bold text-gray-800">{{ log.action_type?.startsWith('render_cron_wakeup') ? 'Render 定時喚醒' : log.action_type === 'python_cron_wakeup' ? '舊版定時喚醒' : '熱心學生打卡' }}</p>
                 <p class="text-xs text-gray-500 font-mono mt-0.5">{{ formatDate(log.created_at) }}</p>
               </div>
             </div>
             <span class="text-xs text-green-700 bg-green-100 border border-green-200 px-2 py-1.5 rounded-md font-bold shadow-sm flex items-center gap-1">
-              <span>🚀</span> 喚醒成功
+              <span>🚀</span> 已觸發喚醒
             </span>
           </li>
           <li v-if="recentLogs.length === 0" class="px-4 py-10 text-center text-gray-400">
