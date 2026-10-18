@@ -8,7 +8,7 @@
 
     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm text-indigo-800 text-sm">
       <p class="font-bold mb-1">💡 運作原理：</p>
-      <p>Render 定時服務部署啟用後，會每分鐘檢查台灣時間的排程，在指定時間讀取「系統設定」中的 Vercel 與 Render 網址並發送喚醒請求。實際執行結果請查看 Render 服務紀錄。</p>
+      <p>Render 免費服務運行時，會每分鐘檢查台灣時間的排程，讀取「系統設定」中的網址並發送喚醒請求。免費服務沒有流量時會休眠，休眠期間的排程不會執行或補跑，因此無法保證準時喚醒。實際結果請查看 Render 服務紀錄。</p>
     </div>
 
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
