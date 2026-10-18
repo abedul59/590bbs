@@ -109,11 +109,40 @@
       <div class="text-4xl mb-3">📭</div>
       <p>目前這個科目還沒有教學內容喔！</p>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="teacherPasswordDialogOpen"
+        class="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="teacher-password-title"
+        @click.self="cancelTeacherAuthorization"
+      >
+        <form class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6" @submit.prevent="submitTeacherPassword">
+          <h3 id="teacher-password-title" class="text-lg font-bold text-gray-900 mb-4">導師驗證</h3>
+          <label for="teacher-password" class="block text-sm font-medium text-gray-700 mb-2">請輸入導師動態密碼</label>
+          <input
+            id="teacher-password"
+            ref="teacherPasswordField"
+            v-model="teacherPassword"
+            type="password"
+            autocomplete="current-password"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+          <p v-if="teacherPasswordError" class="text-sm text-red-600 mt-2" role="alert">{{ teacherPasswordError }}</p>
+          <div class="flex justify-end gap-2 mt-5">
+            <button type="button" class="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold" @click="cancelTeacherAuthorization">取消</button>
+            <button type="submit" :class="[themeObj.bg, themeObj.hover, 'px-4 py-2 rounded-lg text-white font-bold']">確認</button>
+          </div>
+        </form>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
 import { getTodayPassword } from '@/utils/auth'
 
@@ -126,22 +155,55 @@ const activeCategory = ref('')
 const teacherAuthorized = ref(false)
 const editingPost = ref(null)
 const savingPost = ref(false)
+const teacherPasswordDialogOpen = ref(false)
+const teacherPassword = ref('')
+const teacherPasswordError = ref('')
+const teacherPasswordField = ref(null)
+let pendingTeacherAction = null
 
-const authorizeTeacher = () => {
-  if (teacherAuthorized.value) return true
-  const password = window.prompt('請輸入導師動態密碼')
-  if (password === null) return false
-  if (password !== getTodayPassword()) {
-    window.alert('密碼錯誤')
-    return false
+const requestTeacherAuthorization = async (action) => {
+  if (teacherAuthorized.value) {
+    await action()
+    return
   }
+
+  pendingTeacherAction = action
+  teacherPassword.value = ''
+  teacherPasswordError.value = ''
+  teacherPasswordDialogOpen.value = true
+  await nextTick()
+  teacherPasswordField.value?.focus()
+}
+
+const cancelTeacherAuthorization = () => {
+  teacherPasswordDialogOpen.value = false
+  teacherPassword.value = ''
+  teacherPasswordError.value = ''
+  pendingTeacherAction = null
+}
+
+const submitTeacherPassword = async () => {
+  if (teacherPassword.value !== getTodayPassword()) {
+    teacherPassword.value = ''
+    teacherPasswordError.value = '密碼錯誤'
+    await nextTick()
+    teacherPasswordField.value?.focus()
+    return
+  }
+
   teacherAuthorized.value = true
-  return true
+  teacherPasswordDialogOpen.value = false
+  teacherPassword.value = ''
+  teacherPasswordError.value = ''
+  const action = pendingTeacherAction
+  pendingTeacherAction = null
+  await action?.()
 }
 
 const beginEdit = (post) => {
-  if (!authorizeTeacher()) return
-  editingPost.value = JSON.parse(JSON.stringify({ ...post, links: post.links || [] }))
+  requestTeacherAuthorization(() => {
+    editingPost.value = JSON.parse(JSON.stringify({ ...post, links: post.links || [] }))
+  })
 }
 
 const savePost = async () => {
@@ -164,15 +226,16 @@ const savePost = async () => {
 }
 
 const removePost = async (post) => {
-  if (!authorizeTeacher()) return
-  if (!window.confirm(`確定刪除「${post.title}」嗎？`)) return
-  const { error } = await supabase.from('bulletins').delete().eq('id', post.id)
-  if (error) {
-    window.alert(`刪除失敗：${error.message}`)
-    return
-  }
-  bulletins.value = (bulletins.value || []).filter(item => item.id !== post.id)
-  if (editingPost.value?.id === post.id) editingPost.value = null
+  await requestTeacherAuthorization(async () => {
+    if (!window.confirm(`確定刪除「${post.title}」嗎？`)) return
+    const { error } = await supabase.from('bulletins').delete().eq('id', post.id)
+    if (error) {
+      window.alert(`刪除失敗：${error.message}`)
+      return
+    }
+    bulletins.value = (bulletins.value || []).filter(item => item.id !== post.id)
+    if (editingPost.value?.id === post.id) editingPost.value = null
+  })
 }
 
 // ====== 🌟 極速背景打卡與保活邏輯 ======
