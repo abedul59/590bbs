@@ -8,7 +8,7 @@
 
     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm text-indigo-800 text-sm">
       <p class="font-bold mb-1">💡 運作原理：</p>
-      <p>Render 定時服務部署啟用後，會每分鐘檢查台灣時間的排程，在指定時間讀取「系統設定」中的 Vercel 與 Render 網址並發送喚醒請求。實際執行結果請查看 Render 服務紀錄。</p>
+      <p>Render 免費服務運行時，會每分鐘檢查台灣時間的排程。cron-job.org 應每小時呼叫服務的 /run 網址，讓冷啟動完成後立即檢查；服務恢復時會補處理最近 65 分鐘內尚未記錄的排程。執行可能延後約一小時加上冷啟動時間，超過補跑範圍仍可能漏跑。實際結果請查看 Render 服務紀錄。</p>
     </div>
 
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">

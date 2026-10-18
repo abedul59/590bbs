@@ -61,7 +61,7 @@
             <div class="flex items-center gap-3">
               <span class="text-2xl bg-gray-100 p-2 rounded-full">👤</span>
               <div>
-                <p class="text-sm font-bold text-gray-800">{{ log.action_type === 'render_cron_wakeup' ? 'Render 定時喚醒' : log.action_type === 'python_cron_wakeup' ? '舊版定時喚醒' : '熱心學生打卡' }}</p>
+                <p class="text-sm font-bold text-gray-800">{{ log.action_type?.startsWith('render_cron_wakeup') ? 'Render 定時喚醒' : log.action_type === 'python_cron_wakeup' ? '舊版定時喚醒' : '熱心學生打卡' }}</p>
                 <p class="text-xs text-gray-500 font-mono mt-0.5">{{ formatDate(log.created_at) }}</p>
               </div>
             </div>

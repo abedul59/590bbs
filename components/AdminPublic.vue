@@ -1,7 +1,24 @@
 <template>
   <div class="space-y-8 animate-fade-in">
+
+    <nav class="bg-white p-2 rounded-xl shadow-sm border border-gray-100 flex flex-wrap gap-2" aria-label="前台公告與暫存分類">
+      <button
+        type="button"
+        @click="activePublicTab = 'todos'"
+        :class="activePublicTab === 'todos' ? [themeObj.bg, 'text-white'] : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+        class="px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+      >📝 暫存清單</button>
+      <button
+        v-for="cat in categories"
+        :key="cat.id"
+        type="button"
+        @click="selectCategoryTab(cat.name)"
+        :class="activePublicTab === cat.name ? [themeObj.bg, 'text-white'] : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+        class="px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+      >{{ cat.icon }} {{ cat.name }}</button>
+    </nav>
     
-    <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+    <section v-if="activePublicTab === 'todos'" class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
       <div class="flex flex-col md:flex-row justify-between md:items-center mb-4 gap-3">
         <h3 class="text-xl font-semibold flex items-center gap-2">
           📝 管理員暫存清單 
@@ -40,8 +57,18 @@
       </ul>
     </section>
 
-    <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-      <h3 class="text-xl font-semibold mb-4">📢 編輯前台教學內容</h3>
+    <section v-else class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h3 class="text-xl font-semibold">📢 {{ activePublicTab }}公告</h3>
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+          排列方式
+          <select v-model="postSort" class="border border-gray-300 rounded-lg bg-white px-3 py-2 text-sm">
+            <option value="newest">日期：最新優先</option>
+            <option value="oldest">日期：最早優先</option>
+            <option value="important">重要性優先</option>
+          </select>
+        </label>
+      </div>
       
       <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
         <h4 class="font-bold text-gray-700 mb-3">✨ 發布新公告到前台</h4>
@@ -142,7 +169,7 @@
       </div>
 
       <ul class="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-        <li v-for="item in posts" :key="item.id" class="flex flex-col md:flex-row justify-between md:items-center bg-white p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow" :class="item.is_important ? 'border-red-300 bg-red-50' : 'border-gray-200'">
+        <li v-for="item in filteredSortedPosts" :key="item.id" class="flex flex-col md:flex-row justify-between md:items-center bg-white p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow" :class="item.is_important ? 'border-red-300 bg-red-50' : 'border-gray-200'">
           <div class="flex flex-col mb-2 md:mb-0">
             <div class="flex items-center gap-2 flex-wrap">
               <span v-if="item.is_pinned" class="bg-yellow-400 text-white text-[10px] px-1.5 py-0.5 rounded">📌</span>
@@ -161,6 +188,7 @@
             <button @click="deletePost(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors font-medium">刪除</button>
           </div>
         </li>
+        <li v-if="filteredSortedPosts.length === 0" class="text-center text-sm text-gray-400 py-8 border border-dashed border-gray-300 rounded-lg">這個分類目前沒有公告。</li>
       </ul>
     </section>
 
@@ -277,6 +305,8 @@ const handleTodoCsvImport = async (event) => {
 // ====== 📢 前台教學內容 ======
 const categories = ref([])
 const posts = ref([])
+const activePublicTab = ref('todos')
+const postSort = ref('newest')
 const getEmptyPost = () => ({ title: '', description: '', url: '', category: '', is_important: false, is_pinned: false, links: [] })
 const newPost = ref(getEmptyPost()) 
 const editingPost = ref(null)
@@ -294,13 +324,34 @@ const loadPosts = async () => {
   if(data) posts.value = data 
 }
 
+const selectCategoryTab = (category) => {
+  activePublicTab.value = category
+  newPost.value.category = category
+}
+
+const filteredSortedPosts = computed(() => {
+  const filtered = posts.value.filter(post => post.category === activePublicTab.value)
+  return [...filtered].sort((a, b) => {
+    const dateA = new Date(a.created_at).getTime()
+    const dateB = new Date(b.created_at).getTime()
+    if (postSort.value === 'oldest') return dateA - dateB
+    if (postSort.value === 'important') {
+      if (Boolean(a.is_important) !== Boolean(b.is_important)) return a.is_important ? -1 : 1
+      if (Boolean(a.is_pinned) !== Boolean(b.is_pinned)) return a.is_pinned ? -1 : 1
+    }
+    return dateB - dateA
+  })
+})
+
 const addPost = async () => {
   if (!newPost.value.title || !newPost.value.url) return alert('標題與網址必填！')
   if (!newPost.value.category) return alert('請選擇前台分類！')
+  const publishedCategory = newPost.value.category
   await supabase.from('bulletins').insert([{ ...newPost.value }])
   alert('發布成功！')
+  activePublicTab.value = publishedCategory
   newPost.value = getEmptyPost()
-  if (categories.value.length > 0) newPost.value.category = categories.value[0].name
+  newPost.value.category = publishedCategory
   loadPosts() 
 }
 
@@ -318,6 +369,7 @@ const saveEdit = async () => {
   const { id, title, description, url, category, is_important, is_pinned, links } = editingPost.value
   await supabase.from('bulletins').update({ title, description, url, category, is_important, is_pinned, links }).eq('id', id)
   alert('更新成功！')
+  activePublicTab.value = category
   editingPost.value = null 
   loadPosts() 
 }
