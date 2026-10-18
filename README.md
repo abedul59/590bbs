@@ -1,4 +1,10 @@
-# Nuxt Minimal Starter
+# 590bbs
+
+以 Nuxt 建置的班級公告與管理網站。
+
+## Deployment
+
+正式環境由 Vercel 部署；合併至 `main` 分支後會自動建立新的 Production Deployment。
 
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
