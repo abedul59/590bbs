@@ -115,7 +115,7 @@ const dayjs = useDayjs()
 // ====== 分頁與 API 網址設定 ======
 const activeSchool = ref('SHJHS')
 
-// ⚠️ 確認這裡是您的 Hugging Face API 網址！
+// 錄音上傳服務 API 網址
 const apiUrls = {
   'SHJHS': 'https://lawxstudents168-tg-uploader-api.hf.space',
   'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' 

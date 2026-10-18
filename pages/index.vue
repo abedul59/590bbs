@@ -43,7 +43,37 @@
           <span v-if="item.is_important" class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow">🔥 重要</span>
         </div>
 
-        <div class="flex-1">
+        <div v-if="editingPost?.id === item.id" class="flex-1 space-y-3">
+          <div class="flex flex-col sm:flex-row gap-3">
+            <select v-model="editingPost.category" class="border border-gray-300 p-2 rounded bg-white sm:w-1/3">
+              <option v-for="cat in categories" :key="cat.id" :value="cat.name">{{ cat.icon }} {{ cat.name }}</option>
+            </select>
+            <input v-model="editingPost.title" type="text" class="border border-gray-300 p-2 rounded flex-1" aria-label="文章標題">
+          </div>
+          <textarea v-model="editingPost.description" rows="3" class="border border-gray-300 p-2 rounded w-full" aria-label="文章內容"></textarea>
+          <input v-model="editingPost.url" type="url" class="border border-gray-300 p-2 rounded w-full" aria-label="主要網址">
+          <div class="flex flex-wrap gap-4">
+            <label class="flex items-center gap-2 text-sm font-bold text-yellow-700"><input v-model="editingPost.is_pinned" type="checkbox">📌 置頂</label>
+            <label class="flex items-center gap-2 text-sm font-bold text-red-600"><input v-model="editingPost.is_important" type="checkbox">🔥 重要</label>
+          </div>
+          <div class="bg-white/70 border border-gray-200 rounded-lg p-3">
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-sm font-bold text-gray-600">額外相關網址</span>
+              <button type="button" @click="editingPost.links.push({ name: '', url: '' })" class="text-xs text-blue-600 hover:underline">＋新增網址</button>
+            </div>
+            <div v-for="(link, linkIndex) in editingPost.links" :key="linkIndex" class="flex gap-2 mb-2">
+              <input v-model="link.name" type="text" placeholder="名稱" class="border border-gray-300 p-1.5 rounded w-1/3 text-sm">
+              <input v-model="link.url" type="url" placeholder="https://..." class="border border-gray-300 p-1.5 rounded flex-1 text-sm">
+              <button type="button" @click="editingPost.links.splice(linkIndex, 1)" class="text-red-500 px-2" aria-label="移除網址">✖</button>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="editingPost = null" class="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 text-sm font-bold">取消</button>
+            <button type="button" @click="savePost" :disabled="savingPost" :class="[themeObj.bg, themeObj.hover, 'px-4 py-2 rounded-lg text-white text-sm font-bold disabled:opacity-60']">{{ savingPost ? '儲存中…' : '儲存變更' }}</button>
+          </div>
+        </div>
+
+        <div v-else class="flex-1">
           <div class="text-xs text-gray-400 mb-2 flex items-center gap-1 font-mono">
             🕒 {{ formatDate(item.created_at) }}
           </div>
@@ -54,7 +84,7 @@
           <p class="font-normal text-gray-600 whitespace-pre-line">{{ item.description }}</p>
         </div>
 
-        <div class="mt-5 flex flex-wrap gap-2">
+        <div v-if="editingPost?.id !== item.id" class="mt-5 flex flex-wrap gap-2">
           <a :href="item.url" target="_blank" :class="[themeObj.bg, themeObj.hover, 'text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors']">
             前往主連結 🚀
           </a>
@@ -67,6 +97,10 @@
           >
             {{ link.name || '參考網址' }}
           </a>
+          <div class="ml-auto flex gap-2">
+            <button type="button" @click="beginEdit(item)" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-bold transition-colors">編輯</button>
+            <button type="button" @click="removePost(item)" class="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-lg text-sm font-bold transition-colors">刪除</button>
+          </div>
         </div>
       </div>
     </div>
@@ -81,6 +115,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
+import { getTodayPassword } from '@/utils/auth'
 
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
@@ -88,6 +123,57 @@ const currentTheme = useState('currentTheme')
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
 
 const activeCategory = ref('')
+const teacherAuthorized = ref(false)
+const editingPost = ref(null)
+const savingPost = ref(false)
+
+const authorizeTeacher = () => {
+  if (teacherAuthorized.value) return true
+  const password = window.prompt('請輸入導師動態密碼')
+  if (password === null) return false
+  if (password !== getTodayPassword()) {
+    window.alert('密碼錯誤')
+    return false
+  }
+  teacherAuthorized.value = true
+  return true
+}
+
+const beginEdit = (post) => {
+  if (!authorizeTeacher()) return
+  editingPost.value = JSON.parse(JSON.stringify({ ...post, links: post.links || [] }))
+}
+
+const savePost = async () => {
+  if (!editingPost.value?.title || !editingPost.value?.url || !editingPost.value?.category) {
+    window.alert('分類、標題與主要網址為必填')
+    return
+  }
+  savingPost.value = true
+  const { id, title, description, url, category, is_important, is_pinned, links } = editingPost.value
+  const payload = { title, description, url, category, is_important, is_pinned, links }
+  const { error } = await supabase.from('bulletins').update(payload).eq('id', id)
+  savingPost.value = false
+  if (error) {
+    window.alert(`儲存失敗：${error.message}`)
+    return
+  }
+  bulletins.value = (bulletins.value || []).map(post => post.id === id ? { ...post, ...payload } : post)
+  editingPost.value = null
+  window.alert('文章已更新')
+}
+
+const removePost = async (post) => {
+  if (!authorizeTeacher()) return
+  if (!window.confirm(`確定刪除「${post.title}」嗎？`)) return
+  const { error } = await supabase.from('bulletins').delete().eq('id', post.id)
+  if (error) {
+    window.alert(`刪除失敗：${error.message}`)
+    return
+  }
+  bulletins.value = (bulletins.value || []).filter(item => item.id !== post.id)
+  if (editingPost.value?.id === post.id) editingPost.value = null
+}
 
 // ====== 🌟 極速背景打卡與保活邏輯 ======
 const hasCheckedIn = ref(false)
