@@ -115,9 +115,9 @@ const dayjs = useDayjs()
 // ====== 分頁與 API 網址設定 ======
 const activeSchool = ref('SHJHS')
 
-// SHJHS 已移至 Render；GRJHS 暫時維持原服務。
+// 錄音上傳服務 API 網址
 const apiUrls = {
-  'SHJHS': 'https://tlogs-uploader-api.onrender.com',
+  'SHJHS': 'https://lawxstudents168-tg-uploader-api.hf.space',
   'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' 
 }
 
