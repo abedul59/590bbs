@@ -115,10 +115,10 @@ const dayjs = useDayjs()
 // ====== 分頁與 API 網址設定 ======
 const activeSchool = ref('SHJHS')
 
-// SHJHS 使用獨立 Render API；GRJHS 維持原服務。
+// SHJHS 與 GRJHS 各自使用獨立的 Render API 與 Telegram Secret。
 const apiUrls = {
   'SHJHS': 'https://five90bbs-telegram-shjhs-api.onrender.com',
-  'GRJHS': 'https://lawxstudents168-tg-uploader-api-grjhs.hf.space' 
+  'GRJHS': 'https://five90bbs-telegram-grjhs-api.onrender.com'
 }
 
 const currentApiUrl = computed(() => apiUrls[activeSchool.value])
