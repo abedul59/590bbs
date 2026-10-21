@@ -11,7 +11,9 @@
           <div>
             <label class="block text-sm text-gray-600 mb-1">網站風格主題</label>
             <select v-model="siteTheme" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent bg-white', themeObj.ring]">
-              <option v-for="(config, key) in themeConfig" :key="key" :value="key">{{ config.label }}</option>
+              <optgroup v-for="group in themeGroups" :key="group" :label="group">
+                <option v-for="item in groupedThemes[group]" :key="item.key" :value="item.key">{{ item.label }}</option>
+              </optgroup>
             </select>
           </div>
           <div>
@@ -160,12 +162,20 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { themeConfig } from '@/utils/theme'
+import { themeConfig, themeGroups } from '@/utils/theme'
 
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
 const currentTheme = useState('currentTheme')
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
+const groupedThemes = computed(() => Object.fromEntries(
+  themeGroups.map(group => [
+    group,
+    Object.entries(themeConfig)
+      .filter(([, config]) => config.group === group)
+      .map(([key, config]) => ({ key, label: config.label })),
+  ]),
+))
 
 // 全域設定狀態
 const siteTitle = ref('')
