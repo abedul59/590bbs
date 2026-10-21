@@ -6,6 +6,8 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
+    "migrate:tlogs-shjhs": "node scripts/migrate-tlogs-shjhs.mjs",
+    "test": "node --test tests/*.test.mjs",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare"
   },

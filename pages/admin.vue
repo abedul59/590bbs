@@ -31,6 +31,9 @@
         <button @click="activeTab = 'AdminTelegram'" :class="activeTab === 'AdminTelegram' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'" class="flex-1 md:flex-none px-4 py-2.5 rounded-lg font-bold text-sm transition-all duration-200">
           🎙️ TG 大檔保全
         </button>
+        <button @click="activeTab = 'AdminCounseling'" :class="activeTab === 'AdminCounseling' ? 'bg-white text-sky-700 shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'" class="flex-1 md:flex-none px-4 py-2.5 rounded-lg font-bold text-sm transition-all duration-200">
+          📝 SHJHS 輔導紀錄
+        </button>
         <button @click="activeTab = 'AdminMaterial'" :class="activeTab === 'AdminMaterial' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'" class="flex-1 md:flex-none px-4 py-2.5 rounded-lg font-bold text-sm transition-all duration-200">
           📚 TG 教材中心
         </button>
@@ -50,6 +53,7 @@
       <div class="bg-gray-50/50 flex-1 rounded-xl">
         <AdminSystem v-if="activeTab === 'AdminSystem'" />
         <AdminTelegram v-if="activeTab === 'AdminTelegram'" />
+        <AdminCounseling v-if="activeTab === 'AdminCounseling'" />
         <AdminMaterial v-if="activeTab === 'AdminMaterial'" />
         <AdminPrivate v-if="activeTab === 'AdminPrivate'" />
         <AdminPublic v-if="activeTab === 'AdminPublic'" />
