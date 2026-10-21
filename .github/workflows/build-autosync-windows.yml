@@ -1,0 +1,63 @@
+name: Build MacroWave AutoSync for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - autosync-v*
+    paths:
+      - tools/macrowave_autosync/**
+      - .github/workflows/build-autosync-windows.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/macrowave_autosync/requirements-autosync.txt
+      - name: Install dependencies
+        run: python -m pip install -r tools/macrowave_autosync/requirements-autosync.txt pyinstaller==6.18.0
+      - name: Validate Python source
+        run: python -m py_compile tools/macrowave_autosync/MacroWave_AutoSync.py
+      - name: Build Windows executable
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --console
+          --name MacroWave_AutoSync
+          --collect-all pandas
+          --collect-all selenium
+          --collect-all webdriver_manager
+          tools/macrowave_autosync/MacroWave_AutoSync.py
+      - name: Assemble download folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item dist/MacroWave_AutoSync.exe package/
+          Copy-Item tools/macrowave_autosync/macrowave_config.example.json package/
+          Copy-Item tools/macrowave_autosync/README.md package/README.md
+          Compress-Archive -Path package/MacroWave_AutoSync.exe,package/macrowave_config.example.json,package/README.md -DestinationPath MacroWave_AutoSync_Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacroWave_AutoSync_Windows
+          path: package/*
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/autosync-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            package/MacroWave_AutoSync.exe `
+            package/macrowave_config.example.json `
+            MacroWave_AutoSync_Windows.zip `
+            --title "MacroWave AutoSync Windows $env:GITHUB_REF_NAME" `
+            --notes "Windows 自動同步工具：更新原 MacroWave Vercel、590bbs MacroWave 及原 MacroWave Render。下載 ZIP 後先依 README 設定 macrowave_config.json。"
