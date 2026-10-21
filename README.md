@@ -6,6 +6,30 @@
 
 正式環境由 Vercel 部署；合併至 `main` 分支後會自動建立新的 Production Deployment。
 
+## SHJHS 輔導紀錄整合
+
+後台的「SHJHS 輔導紀錄」分頁整合自 `abedul59/tlogs-shjhs`，包含文字紀錄、月曆查詢、編輯刪除、SHJHS Telegram 錄音保全，以及完整 JSON 備份匯入／匯出。
+
+首次啟用時，請在目標 Supabase SQL Editor 執行：
+
+```text
+supabase/migrations/202610210001_create_shjhs_counseling_tables.sql
+```
+
+若要直接將舊 Supabase 全量搬到目前專案，先使用 `--dry-run` 核對來源筆數，再執行正式轉移：
+
+```bash
+SOURCE_SUPABASE_URL=... SOURCE_SUPABASE_KEY=... \
+TARGET_SUPABASE_URL=... TARGET_SUPABASE_KEY=... \
+npm run migrate:tlogs-shjhs -- --dry-run
+
+SOURCE_SUPABASE_URL=... SOURCE_SUPABASE_KEY=... \
+TARGET_SUPABASE_URL=... TARGET_SUPABASE_KEY=... \
+npm run migrate:tlogs-shjhs
+```
+
+轉移程式會分頁讀取 `counseling_logs` 與 `evidence_logs`，並依原始 `id` upsert；舊錄音流水號會轉為 `legacy:<原始 ID>`，避免和新紀錄衝突，重跑也不會產生重複紀錄。錄音本體保留在原 SHJHS Telegram 群組，轉移的是 Telegram 連結、訊息 ID、檔名與指紋等索引。正式環境可用 `NUXT_PUBLIC_SHJHS_TELEGRAM_API_URL` 覆寫預設 Render API 網址。
+
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
 ## Setup
