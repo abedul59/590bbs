@@ -9,7 +9,7 @@
     </div>
 
     <div v-if="!isAuthenticated" class="space-y-4 max-w-md mx-auto py-20">
-      <label class="block text-sm font-medium text-gray-700">請輸入今日動態密碼</label>
+      <label class="block text-sm font-medium text-gray-700">輸入管理員密碼</label>
       <input 
         v-model="inputPassword" 
         type="password" 
@@ -82,7 +82,7 @@ const login = () => {
     isAuthenticated.value = true
     errorMsg.value = ''
   } else {
-    errorMsg.value = '密碼錯誤！請確認今日動態密碼。'
+    errorMsg.value = '密碼錯誤'
   }
 }
 

@@ -1,5 +1,15 @@
 <template>
   <div>
+    <div class="mt-6 flex justify-end">
+      <button
+        type="button"
+        :class="[themeObj.bg, themeObj.hover, 'rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-md transition hover:shadow-lg']"
+        @click="openQuickCreate"
+      >
+        ＋ 新增公告
+      </button>
+    </div>
+
     <div class="flex justify-center space-x-2 md:space-x-4 mt-6 mb-6 flex-wrap gap-y-3">
       <button 
         v-for="cat in categories" :key="cat.id"
@@ -121,7 +131,7 @@
       >
         <form class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6" @submit.prevent="submitTeacherPassword">
           <h3 id="teacher-password-title" class="text-lg font-bold text-gray-900 mb-4">導師驗證</h3>
-          <label for="teacher-password" class="block text-sm font-medium text-gray-700 mb-2">請輸入導師動態密碼</label>
+          <label for="teacher-password" class="block text-sm font-medium text-gray-700 mb-2">輸入導師密碼</label>
           <input
             id="teacher-password"
             ref="teacherPasswordField"
@@ -137,6 +147,15 @@
           </div>
         </form>
       </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <PublicQuickCreate
+        v-if="quickCreateOpen"
+        :categories="categories || []"
+        @close="quickCreateOpen = false"
+        @post-created="handleQuickPostCreated"
+      />
     </Teleport>
   </div>
 </template>
@@ -159,6 +178,7 @@ const teacherPasswordDialogOpen = ref(false)
 const teacherPassword = ref('')
 const teacherPasswordError = ref('')
 const teacherPasswordField = ref(null)
+const quickCreateOpen = ref(false)
 let pendingTeacherAction = null
 
 const requestTeacherAuthorization = async (action) => {
@@ -236,6 +256,17 @@ const removePost = async (post) => {
     bulletins.value = (bulletins.value || []).filter(item => item.id !== post.id)
     if (editingPost.value?.id === post.id) editingPost.value = null
   })
+}
+
+const openQuickCreate = () => {
+  requestTeacherAuthorization(() => {
+    quickCreateOpen.value = true
+  })
+}
+
+const handleQuickPostCreated = (post) => {
+  bulletins.value = [post, ...(bulletins.value || [])]
+  activeCategory.value = post.category
 }
 
 // ====== 🌟 極速背景打卡與保活邏輯 ======
