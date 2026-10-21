@@ -77,10 +77,7 @@ const currentTabComponent = computed(() => components[activeTab.value] || Macrow
 
 <style scoped>
 .macrowave-viewport {
-  position: relative;
-  left: 50%;
-  width: calc(100vw - 1rem);
-  margin-left: calc(-50vw + .5rem);
+  width: 100%;
   min-height: 80vh;
   color: #333;
   background: #f4f6f9;

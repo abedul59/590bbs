@@ -1,5 +1,5 @@
 <template>
-  <div :class="['mt-10 bg-white rounded-xl shadow-lg transition-colors duration-300 relative min-h-[80vh]', activeTab === 'AdminMacrowave' ? 'p-0' : 'p-4 md:p-8']">
+  <div :class="['bg-white transition-colors duration-300 relative min-h-[80vh]', activeTab === 'AdminMacrowave' ? 'm-0 min-h-screen p-0 rounded-none shadow-none' : 'mt-10 p-4 md:p-8 rounded-xl shadow-lg']">
     
     <div v-if="activeTab !== 'AdminMacrowave'" class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold text-gray-800">後台管理中心</h2>
@@ -89,7 +89,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { getTodayPassword } from '@/utils/auth'
 
 const isAuthenticated = ref(false)
@@ -102,6 +102,7 @@ const showPrivateLogin = ref(false)
 const privatePassword = ref('')
 const privateError = ref('')
 const privatePasswordInput = ref(null)
+const macrowaveMode = useState('macrowaveMode', () => false)
 
 const openPrivateConsole = async () => {
   privatePassword.value = ''
@@ -124,9 +125,11 @@ const unlockPrivateConsole = () => {
   }
   closePrivateLogin()
   activeTab.value = 'AdminMacrowave'
+  macrowaveMode.value = true
 }
 
 const closePrivateConsole = () => {
+  macrowaveMode.value = false
   activeTab.value = 'AdminSystem'
 }
 
@@ -147,6 +150,10 @@ const logout = () => {
   activeTab.value = 'AdminSystem' // 登出後重置回首頁籤
   navigateTo('/')
 }
+
+onBeforeUnmount(() => {
+  macrowaveMode.value = false
+})
 </script>
 
 <style scoped>
