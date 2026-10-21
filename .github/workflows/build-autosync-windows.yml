@@ -3,12 +3,14 @@ name: Build MacroWave AutoSync for Windows
 on:
   workflow_dispatch:
   push:
+    tags:
+      - autosync-v*
     paths:
       - tools/macrowave_autosync/**
       - .github/workflows/build-autosync-windows.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -40,9 +42,22 @@ jobs:
           Copy-Item dist/MacroWave_AutoSync.exe package/
           Copy-Item tools/macrowave_autosync/macrowave_config.example.json package/
           Copy-Item tools/macrowave_autosync/README.md package/README.md
+          Compress-Archive -Path package/MacroWave_AutoSync.exe,package/macrowave_config.example.json,package/README.md -DestinationPath MacroWave_AutoSync_Windows.zip
       - uses: actions/upload-artifact@v4
         with:
           name: MacroWave_AutoSync_Windows
           path: package/*
           if-no-files-found: error
           retention-days: 90
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/autosync-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            package/MacroWave_AutoSync.exe `
+            package/macrowave_config.example.json `
+            MacroWave_AutoSync_Windows.zip `
+            --title "MacroWave AutoSync Windows $env:GITHUB_REF_NAME" `
+            --notes "Windows 自動同步工具：更新原 MacroWave Vercel、590bbs MacroWave 及原 MacroWave Render。下載 ZIP 後先依 README 設定 macrowave_config.json。"
