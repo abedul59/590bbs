@@ -24,7 +24,7 @@ create table if not exists public.evidence_logs (
 create index if not exists evidence_logs_log_date_idx
   on public.evidence_logs (log_date, created_at);
 
-create unique index if not exists evidence_logs_message_id_unique_idx
+create index if not exists evidence_logs_message_id_idx
   on public.evidence_logs (message_id)
   where message_id is not null;
 
