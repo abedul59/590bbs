@@ -130,8 +130,8 @@
         @click.self="cancelTeacherAuthorization"
       >
         <form class="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6" @submit.prevent="submitTeacherPassword">
-          <h3 id="teacher-password-title" class="text-lg font-bold text-gray-900 mb-4">導師驗證</h3>
-          <label for="teacher-password" class="block text-sm font-medium text-gray-700 mb-2">輸入導師密碼</label>
+          <h3 id="teacher-password-title" class="text-lg font-bold text-gray-900 mb-4">管理員驗證</h3>
+          <label for="teacher-password" class="block text-sm font-medium text-gray-700 mb-2">輸入管理員密碼</label>
           <input
             id="teacher-password"
             ref="teacherPasswordField"
