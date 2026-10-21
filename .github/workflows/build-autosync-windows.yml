@@ -1,0 +1,51 @@
+name: Build MacroWave AutoSync for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - tools/macrowave_autosync/**
+      - .github/workflows/build-autosync-windows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/macrowave_autosync/requirements-autosync.txt
+      - name: Install dependencies
+        run: py -m pip install -r tools/macrowave_autosync/requirements-autosync.txt pyinstaller==6.18.0
+      - name: Validate Python source
+        run: |
+          py -m py_compile tools/macrowave_autosync/MacroWave_AutoSync.py
+          $env:PYTHONPATH = "tools/macrowave_autosync"
+          py -m unittest discover -s tools/macrowave_autosync/tests -v
+      - name: Build Windows executable
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --console
+          --name MacroWave_AutoSync
+          --collect-all pandas
+          --collect-all selenium
+          --collect-all webdriver_manager
+          tools/macrowave_autosync/MacroWave_AutoSync.py
+      - name: Assemble download folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item dist/MacroWave_AutoSync.exe package/
+          Copy-Item tools/macrowave_autosync/macrowave_config.example.json package/
+          Copy-Item tools/macrowave_autosync/README.md package/README.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacroWave_AutoSync_Windows
+          path: package/*
+          if-no-files-found: error
+          retention-days: 90
