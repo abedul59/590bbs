@@ -1,19 +1,19 @@
 <template>
   <div
-    :class="['site-shell min-h-screen bg-gray-50 font-sans', { 'festival-site': themeObj.festival }]"
+    :class="['site-shell min-h-screen bg-gray-50 font-sans', { 'festival-site': themeObj.festival && !macrowaveMode, 'macrowave-mode': macrowaveMode }]"
     :style="festivalStyle"
     :data-theme="currentTheme"
   >
-    <div v-if="themeObj.festival" class="festival-decor festival-decor-left" aria-hidden="true">{{ themeObj.festival.motifs[0] }}</div>
-    <div v-if="themeObj.festival" class="festival-decor festival-decor-right" aria-hidden="true">{{ themeObj.festival.motifs[1] }}</div>
+    <div v-if="themeObj.festival && !macrowaveMode" class="festival-decor festival-decor-left" aria-hidden="true">{{ themeObj.festival.motifs[0] }}</div>
+    <div v-if="themeObj.festival && !macrowaveMode" class="festival-decor festival-decor-right" aria-hidden="true">{{ themeObj.festival.motifs[1] }}</div>
 
-    <div :class="[themeObj.festival ? 'festival-banner' : themeObj.bg, 'site-marquee text-white overflow-hidden whitespace-nowrap py-2 px-4 relative transition-colors duration-300']">
+    <div v-if="!macrowaveMode" :class="[themeObj.festival ? 'festival-banner' : themeObj.bg, 'site-marquee text-white overflow-hidden whitespace-nowrap py-2 px-4 relative transition-colors duration-300']">
       <div class="inline-block animate-marquee">
         📢 {{ settings?.marquee_text || '歡迎來到教學佈告欄...' }}
       </div>
     </div>
 
-    <header class="site-header bg-white shadow-sm p-4 flex justify-between items-center transition-colors duration-300">
+    <header v-if="!macrowaveMode" class="site-header bg-white shadow-sm p-4 flex justify-between items-center transition-colors duration-300">
       <div>
         <h1 class="text-2xl font-bold text-gray-800">{{ settings?.title || '教學佈告欄' }}</h1>
         <p v-if="themeObj.festival" class="festival-subtitle">{{ themeObj.festival.motifs.join(' ') }} {{ themeObj.festival.description }}</p>
@@ -21,11 +21,11 @@
       <NuxtLink to="/admin" :class="['text-sm font-bold hover:opacity-75 transition-colors', themeObj.text]">管理後台</NuxtLink>
     </header>
 
-    <main class="site-main container mx-auto p-4 max-w-4xl">
+    <main :class="macrowaveMode ? 'site-main w-full max-w-none p-0' : 'site-main container mx-auto p-4 max-w-4xl'">
       <NuxtPage />
     </main>
 
-    <FloatingEditor />
+    <FloatingEditor v-if="!macrowaveMode" />
   </div>
 </template>
 
@@ -37,8 +37,10 @@ const supabase = useSupabaseClient()
 
 // 建立全域響應式主題狀態，預設為 purple
 const currentTheme = useState('currentTheme', () => 'purple')
+const macrowaveMode = useState('macrowaveMode', () => false)
 const themeObj = computed(() => themeConfig[currentTheme.value] || themeConfig.purple)
 const festivalStyle = computed(() => {
+  if (macrowaveMode.value) return undefined
   const skin = themeObj.value.festival
   if (!skin) return undefined
   return {
@@ -75,6 +77,7 @@ onMounted(() => {
   100% { transform: translateX(-100%); }
 }
 .animate-marquee { animation: marquee 15s linear infinite; }
+.macrowave-mode { background: #f4f6f9 !important; }
 
 .festival-site {
   position: relative;
