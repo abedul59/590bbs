@@ -14,6 +14,7 @@
   "dependencies": {
     "@nuxtjs/supabase": "^2.0.4",
     "@nuxtjs/tailwindcss": "^6.14.0",
+    "@vercel/functions": "2.2.13",
     "dayjs": "^1.11.20",
     "dayjs-nuxt": "^2.1.11",
     "nuxt": "^4.4.2",
