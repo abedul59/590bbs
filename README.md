@@ -6,6 +6,8 @@
 
 正式環境由 Vercel 部署；合併至 `main` 分支後會自動建立新的 Production Deployment。
 
+cron-job.org 應每小時呼叫 `https://shjhs-class-system.vercel.app/api/cron-render`。此 Vercel 端點立即回傳 HTTP 204／0 bytes，再使用背景任務喚醒 Render，避免免費 Render 冷啟動時的平台回應被 cron-job.org 判定為 `Response data too big`。不要再將 cron-job.org 直接指向 Render `/run`。
+
 ## SHJHS 輔導紀錄整合
 
 後台的「SHJHS 輔導紀錄」分頁整合自 `abedul59/tlogs-shjhs`，包含文字紀錄、月曆查詢、編輯刪除、SHJHS Telegram 錄音保全，以及完整 JSON 備份匯入／匯出。
