@@ -10,7 +10,7 @@
           </div>
           <div>
             <label class="block text-sm text-gray-600 mb-1">網站風格主題</label>
-            <select v-model="siteTheme" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent bg-white', themeObj.ring]">
+            <select v-model="siteTheme" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent bg-white', themeObj.ring]" @change="currentTheme = siteTheme">
               <optgroup v-for="group in themeGroups" :key="group" :label="group">
                 <option v-for="item in groupedThemes[group]" :key="item.key" :value="item.key">{{ item.label }}</option>
               </optgroup>
@@ -26,6 +26,13 @@
           <div>
             <label class="block text-sm text-gray-600 mb-1">編輯器進入密碼</label>
             <input v-model="editorPassword" type="text" :class="['border border-gray-300 p-2 w-full rounded focus:outline-none focus:ring-2 focus:border-transparent', themeObj.ring]" placeholder="預設 590doc">
+          </div>
+        </div>
+        <div v-if="selectedTheme.festival" class="flex items-center gap-4 border p-4" :style="{ borderColor: selectedTheme.festival.border, borderRadius: selectedTheme.festival.radius, background: selectedTheme.festival.surfaceAlt, boxShadow: selectedTheme.festival.shadow }">
+          <div class="text-4xl whitespace-nowrap" aria-hidden="true">{{ selectedTheme.festival.motifs.join(' ') }}</div>
+          <div>
+            <p class="font-bold" :style="{ color: selectedTheme.festival.ink, fontFamily: selectedTheme.festival.font }">{{ selectedTheme.label }}</p>
+            <p class="text-sm opacity-70" :style="{ color: selectedTheme.festival.ink }">完整佈景：{{ selectedTheme.festival.description }}。選取時可即時預覽，按下「儲存全域設定」後正式套用。</p>
           </div>
         </div>
         <div>
@@ -183,6 +190,7 @@ const marqueeText = ref('')
 const siteTheme = ref('purple')
 const siteSortOrder = ref('newest')
 const editorPassword = ref('590doc')
+const selectedTheme = computed(() => themeConfig[siteTheme.value] || themeConfig.purple)
 
 // 分類狀態
 const postCategories = ref([])
