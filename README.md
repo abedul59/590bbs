@@ -16,6 +16,12 @@
 supabase/migrations/202610210001_create_shjhs_counseling_tables.sql
 ```
 
+若曾套用較早版本（`message_id` 為唯一值），再執行：
+
+```text
+supabase/migrations/202610210002_allow_duplicate_evidence_message_ids.sql
+```
+
 若要直接將舊 Supabase 全量搬到目前專案，先使用 `--dry-run` 核對來源筆數，再執行正式轉移：
 
 ```bash
