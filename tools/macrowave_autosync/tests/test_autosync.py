@@ -8,23 +8,50 @@ import MacroWave_AutoSync as autosync
 
 
 class ConfigTests(unittest.TestCase):
+    def load_from_directory(self, directory, environment=None):
+        with patch.object(autosync, "get_app_dir", return_value=directory), patch.object(
+            autosync.os, "getcwd", return_value=directory
+        ), patch.dict(os.environ, environment or {}, clear=True):
+            return autosync.load_config()
+
     def test_example_placeholder_is_not_treated_as_a_fred_key(self):
         with tempfile.TemporaryDirectory() as directory:
             with open(os.path.join(directory, "macrowave_config.json"), "w", encoding="utf-8") as config_file:
                 json.dump({"fred_api_key": "請填入您的 FRED API Key"}, config_file)
 
-            with patch.object(autosync, "get_app_dir", return_value=directory), patch.dict(os.environ, {}, clear=True):
-                self.assertEqual(autosync.load_config()["fred_api_key"], "")
+            self.assertEqual(self.load_from_directory(directory)["fred_api_key"], "")
 
     def test_blank_environment_value_falls_back_to_config_file(self):
         with tempfile.TemporaryDirectory() as directory:
             with open(os.path.join(directory, "macrowave_config.json"), "w", encoding="utf-8") as config_file:
                 json.dump({"fred_api_key": "configured-key"}, config_file)
 
-            with patch.object(autosync, "get_app_dir", return_value=directory), patch.dict(
-                os.environ, {"FRED_API_KEY": "   "}, clear=True
-            ):
-                self.assertEqual(autosync.load_config()["fred_api_key"], "configured-key")
+            config = self.load_from_directory(directory, {"FRED_API_KEY": "   "})
+            self.assertEqual(config["fred_api_key"], "configured-key")
+
+    def test_supports_uppercase_key_in_example_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = os.path.join(directory, "macrowave_config.example.json")
+            with open(config_path, "w", encoding="utf-8") as config_file:
+                json.dump({"FRED_API_KEY": "configured-key"}, config_file)
+
+            config = self.load_from_directory(directory)
+            self.assertEqual(config["fred_api_key"], "configured-key")
+            self.assertEqual(config["fred_api_key_source"], config_path)
+
+    def test_finds_json_in_launch_directory_when_exe_directory_differs(self):
+        with tempfile.TemporaryDirectory() as exe_directory, tempfile.TemporaryDirectory() as launch_directory:
+            config_path = os.path.join(launch_directory, "macrowave_config.json")
+            with open(config_path, "w", encoding="utf-8") as config_file:
+                json.dump({"fredApiKey": "configured-key"}, config_file)
+
+            with patch.object(autosync, "get_app_dir", return_value=exe_directory), patch.object(
+                autosync.os, "getcwd", return_value=launch_directory
+            ), patch.dict(os.environ, {}, clear=True):
+                config = autosync.load_config()
+
+            self.assertEqual(config["fred_api_key"], "configured-key")
+            self.assertEqual(config["fred_api_key_source"], config_path)
 
 
 class Mark17Tests(unittest.TestCase):

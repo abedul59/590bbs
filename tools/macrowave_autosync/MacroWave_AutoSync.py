@@ -59,25 +59,76 @@ def normalize_api_key(value):
     return key
 
 
+def get_config_paths():
+    """Return supported config locations in priority order."""
+    directories = [get_app_dir(), os.getcwd()]
+    filenames = [
+        "macrowave_config.json",
+        "macrowave_config.example.json",
+        "macrowave_config.json.txt",
+    ]
+    paths = []
+    for directory in directories:
+        for filename in filenames:
+            path = os.path.abspath(os.path.join(directory, filename))
+            if path not in paths:
+                paths.append(path)
+    return paths
+
+
+def get_config_value(config, names):
+    """Read the first non-empty supported key name from a JSON object."""
+    if not isinstance(config, dict):
+        return ""
+    for name in names:
+        value = normalize_api_key(config.get(name))
+        if value:
+            return value
+    return ""
+
+
 def load_config():
-    """讀取執行檔旁的設定檔；Windows 環境變數具有最高優先權。"""
-    config = {}
-    config_path = os.path.join(get_app_dir(), "macrowave_config.json")
-    if os.path.exists(config_path):
+    """讀取 Windows 環境變數或 EXE／啟動目錄旁的 JSON 設定。"""
+    loaded_configs = []
+    for config_path in get_config_paths():
+        if not os.path.isfile(config_path):
+            continue
         try:
             with open(config_path, 'r', encoding='utf-8-sig') as config_file:
                 config = json.load(config_file)
+            if not isinstance(config, dict):
+                raise ValueError("JSON 最外層必須是物件")
+            loaded_configs.append((config_path, config))
         except Exception as error:
             print(f"⚠️ 無法讀取 {config_path}: {error}")
 
     env_fred_key = normalize_api_key(os.environ.get("FRED_API_KEY"))
-    file_fred_key = normalize_api_key(config.get("fred_api_key"))
     env_upload_key = normalize_api_key(os.environ.get("MACROWAVE_API_KEY"))
-    file_upload_key = normalize_api_key(config.get("upload_api_key"))
+
+    file_fred_key = ""
+    file_upload_key = ""
+    fred_source = ""
+    upload_source = ""
+    for config_path, config in loaded_configs:
+        if not file_fred_key:
+            file_fred_key = get_config_value(
+                config, ("fred_api_key", "FRED_API_KEY", "fredApiKey", "fred_key")
+            )
+            if file_fred_key:
+                fred_source = config_path
+        if not file_upload_key:
+            file_upload_key = get_config_value(
+                config, ("upload_api_key", "MACROWAVE_API_KEY", "uploadApiKey")
+            )
+            if file_upload_key:
+                upload_source = config_path
 
     return {
         "fred_api_key": env_fred_key or file_fred_key,
         "upload_api_key": env_upload_key or file_upload_key or "macrowave168",
+        "fred_api_key_source": "Windows 環境變數 FRED_API_KEY" if env_fred_key else fred_source,
+        "upload_api_key_source": "Windows 環境變數 MACROWAVE_API_KEY" if env_upload_key else upload_source,
+        "config_paths": get_config_paths(),
     }
 
 
@@ -938,8 +989,13 @@ def main():
     print("==============================================")
     print("      MacroWave 自動抓取與同步腳本 (全自動版)      ")
     print("==============================================\n")
-    if not APP_CONFIG["fred_api_key"]:
+    if APP_CONFIG["fred_api_key"]:
+        log_msg(f"✅ FRED API Key 已載入（來源：{APP_CONFIG['fred_api_key_source']}）")
+    else:
         log_msg("⚠️ 尚未設定 FRED API Key；FRED 指標將使用備援值。")
+        log_msg("請確認 JSON 內含 fred_api_key 或 FRED_API_KEY，並放在下列任一位置：")
+        for config_path in APP_CONFIG["config_paths"]:
+            log_msg(f"  - {config_path}")
     
     setup_driver()
 
