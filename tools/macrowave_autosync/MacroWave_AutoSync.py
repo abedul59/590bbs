@@ -41,6 +41,24 @@ def get_app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+def normalize_api_key(value):
+    """Normalize a configured API key without ever logging its contents."""
+    if not isinstance(value, str):
+        return ""
+
+    key = value.strip()
+    normalized = key.casefold().replace("_", " ").replace("-", " ")
+    placeholders = {
+        "your fred api key",
+        "fred api key",
+        "please enter your fred api key",
+        "請填入您的 fred api key",
+    }
+    if not key or normalized in placeholders or "請填入" in normalized:
+        return ""
+    return key
+
+
 def load_config():
     """讀取執行檔旁的設定檔；Windows 環境變數具有最高優先權。"""
     config = {}
@@ -52,9 +70,14 @@ def load_config():
         except Exception as error:
             print(f"⚠️ 無法讀取 {config_path}: {error}")
 
+    env_fred_key = normalize_api_key(os.environ.get("FRED_API_KEY"))
+    file_fred_key = normalize_api_key(config.get("fred_api_key"))
+    env_upload_key = normalize_api_key(os.environ.get("MACROWAVE_API_KEY"))
+    file_upload_key = normalize_api_key(config.get("upload_api_key"))
+
     return {
-        "fred_api_key": os.environ.get("FRED_API_KEY", config.get("fred_api_key", "")).strip(),
-        "upload_api_key": os.environ.get("MACROWAVE_API_KEY", config.get("upload_api_key", "macrowave168")).strip() or "macrowave168",
+        "fred_api_key": env_fred_key or file_fred_key,
+        "upload_api_key": env_upload_key or file_upload_key or "macrowave168",
     }
 
 
@@ -746,7 +769,7 @@ class MacroWaveMark17_Logic:
                 except: pass
 
     def get_us_inflation_gap(self):
-        if not self.fred: return 0.0
+        if not self.fred: return None
         try:
             log_msg("抓取美國 PPI & CPI (FRED)...")
             ppi_series = self.fred.get_series('PPIACO').tail(13)
@@ -758,15 +781,17 @@ class MacroWaveMark17_Logic:
             return gap
         except Exception as e:
             log_msg(f"Inflation Gap 失敗: {e}")
-            return 0.0
+            return None
 
     def get_us_bei(self):
-        if not self.fred: return 0.0
+        if not self.fred: return None
         try:
             log_msg("抓取美國 BEI (FRED)...")
             bei = self.fred.get_series('T10YIE').iloc[-1]
             return float(bei)
-        except: return 0.0
+        except Exception as e:
+            log_msg(f"BEI 抓取失敗: {e}")
+            return None
 
     def calculate_score(self, data_a, data_b, data_c):
         score = 0
@@ -817,24 +842,30 @@ class MacroWaveMark17_Logic:
         except: details.append(("衰退機率", "Error", "0"))
 
         gap = self.get_us_inflation_gap()
-        if gap > 4:
+        if gap is None:
+            details.append(("PPI - CPI > 4%", "N/A (FRED)", "-"))
+        elif gap > 4:
             score += 2; details.append(("PPI - CPI > 4%", f"{gap:.2f}%", "+2"))
         else: details.append(("PPI - CPI > 4%", f"{gap:.2f}%", "0"))
 
         bei = self.get_us_bei()
-        if bei > 2.5:
+        if bei is None:
+            details.append(("BEI > 2.5%", "N/A (FRED)", "-"))
+        elif bei > 2.5:
             score += 1; details.append(("BEI > 2.5%", f"{bei:.2f}%", "+1"))
         else: details.append(("BEI > 2.5%", f"{bei:.2f}%", "0"))
 
         try:
             ur = float(data_c.get('Unemployment', 0))
-            if ur > 4:
-                score += 1; details.append(("失業率 > 4%", f"{ur}%", "+1"))
-            else: details.append(("失業率 > 4%", f"{ur}%", "0"))
-            
             if ur > 4.5:
                 score += 2; details.append(("失業率 > 4.5%", f"{ur}%", "+2"))
-            else: details.append(("失業率 > 4.5%", f"{ur}%", "0"))
+                details.append(("失業率 > 4%", f"{ur}%", "0 (已計入 > 4.5%)"))
+            elif ur > 4:
+                score += 1; details.append(("失業率 > 4%", f"{ur}%", "+1"))
+                details.append(("失業率 > 4.5%", f"{ur}%", "0"))
+            else:
+                details.append(("失業率 > 4%", f"{ur}%", "0"))
+                details.append(("失業率 > 4.5%", f"{ur}%", "0"))
         except: 
             details.extend([("失業率", "Error", "0"), ("失業率", "Error", "0")])
 
@@ -870,7 +901,17 @@ class MacroWaveJSON_Logic:
         elif mark17_score >= 6: advice = "Caution"
         export_data['advice'] = advice
         
-        export_data['mark17'] = [{'item': i, 'value': v, 'score': s, 'status': "Warning" if str(s) != "0" and s != 0 else "Safe"} for i, v, s in mark17_details]
+        def detail_status(detail_score):
+            if detail_score == "-":
+                return "Unavailable"
+            match = re.search(r'[+]?(\d+(?:\.\d+)?)', str(detail_score))
+            return "Warning" if match and float(match.group(1)) > 0 else "Safe"
+
+        export_data['mark17_complete'] = not any(score == "-" for _, _, score in mark17_details)
+        export_data['mark17'] = [
+            {'item': item, 'value': value, 'score': item_score, 'status': detail_status(item_score)}
+            for item, value, item_score in mark17_details
+        ]
 
         return export_data
 

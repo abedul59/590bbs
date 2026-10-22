@@ -70,6 +70,9 @@
                         </div>
                         <div :class="['advice-badge', 'advice-' + dashboardData.content.advice]">策略建議: {{ dashboardData.content.advice }}</div>
                     </div>
+                    <div v-if="dashboardData.content.mark17_complete === false" class="alert alert-warning mt-3 mb-0 py-2">
+                        FRED 資料未完整取得；目前分數不包含缺失項目，請勿將缺資料解讀為安全訊號。
+                    </div>
                 </div>
             </div>
 
@@ -298,7 +301,7 @@
                                                 </div>
                                             </td>
                                             <td class="text-center">
-                                                <span v-if="item.score !== 0 && item.score !== '-'" class="badge bg-danger rounded-pill px-3 fs-6">
+                                                <span v-if="Number.parseFloat(item.score) > 0" class="badge bg-danger rounded-pill px-3 fs-6">
                                                     {{ typeof item.score === 'number' && item.score > 0 ? '+' + item.score : item.score }}
                                                 </span>
                                                 <span v-else class="text-muted text-opacity-50">-</span>

@@ -3,6 +3,8 @@ name: Build MacroWave AutoSync for Windows
 on:
   workflow_dispatch:
   push:
+    branches:
+      - codex/fred-mark17-windows-build
     tags:
       - autosync-v*
     paths:
