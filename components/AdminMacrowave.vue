@@ -2,7 +2,10 @@
   <section class="macrowave-viewport">
     <div class="macrowave-shell">
       <div class="header-section text-center position-relative">
-        <button type="button" class="btn btn-sm btn-light exit-button" @click="$emit('exit')">返回後台</button>
+        <div class="header-actions">
+          <button type="button" class="btn btn-sm btn-light" @click="$emit('home')">返回首頁</button>
+          <button type="button" class="btn btn-sm btn-outline-light" @click="$emit('exit')">返回後台</button>
+        </div>
         <h1 class="fw-bold">📊 MacroWave 總經戰情室</h1>
         <p class="opacity-90 mb-0">全方位總體經濟與資產配置監控中心</p>
       </div>
@@ -39,7 +42,7 @@ import MacrowaveTaiexHistoryMonthly from './macrowave/TabTaiexHistoryMonthly.vue
 import MacrowaveTaiexTraditional from './macrowave/TabTaiexTraditional.vue'
 import MacrowaveTmfRetailRatio from './macrowave/TabTmfRetailRatio.vue'
 
-defineEmits(['exit'])
+defineEmits(['exit', 'home'])
 
 useHead({
   link: [{ rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' }]
@@ -90,7 +93,7 @@ const currentTabComponent = computed(() => components[activeTab.value] || Macrow
   color: white;
   background: linear-gradient(135deg, #1a2980 0%, #26d0ce 100%);
 }
-.exit-button { position: absolute; top: 1rem; left: 1rem; }
+.header-actions { position: absolute; top: 1rem; left: 1rem; display: flex; gap: .5rem; }
 .nav-item { min-width: 10rem; flex: 1 1 10rem; }
 .nav-tabs .nav-link { border: 0; color: #6c757d; transition: all .3s; background: transparent; }
 .nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 4px solid #0d6efd; }

@@ -1,0 +1,35 @@
+name: Migrate Eco4Cycles history
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/migrate-eco4cycles-data.mjs
+      - .github/workflows/migrate-eco4cycles-data.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Export records from the original Eco4Cycles deployment
+        run: node scripts/migrate-eco4cycles-data.mjs
+      - name: Commit the portable database snapshot
+        run: |
+          git add server/assets/eco4cycles-records.json
+          if git diff --cached --quiet; then
+            echo "Eco4Cycles data is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Migrate Eco4Cycles history"
+          git push

@@ -38,6 +38,20 @@ npm run migrate:tlogs-shjhs
 
 轉移程式會分頁讀取 `counseling_logs` 與 `evidence_logs`，並依原始 `id` upsert；舊錄音流水號會轉為 `legacy:<原始 ID>`，避免和新紀錄衝突，重跑也不會產生重複紀錄。錄音本體保留在原 SHJHS Telegram 群組，轉移的是 Telegram 連結、訊息 ID、檔名與指紋等索引。正式環境可用 `NUXT_PUBLIC_SHJHS_TELEGRAM_API_URL` 覆寫預設 Render API 網址。
 
+## Eco4Cycles 整合與資料遷移
+
+隱藏入口 `/macrowave` 目前可選擇 MacroWave 或 Eco4Cycles。Eco4Cycles 使用隔離的 `eco4cycles_economic_records` 資料表；首次啟用時，請在目標 Supabase SQL Editor 執行：
+
+```text
+supabase/migrations/202610230001_create_eco4cycles_records.sql
+```
+
+推送到 `main` 後，`Migrate Eco4Cycles history` 工作流程會從原站逐筆匯出歷史紀錄並保存為伺服器快照。新表為空時，第一次開啟 Eco4Cycles 會自動將快照 upsert 進新表；若表尚未建立，畫面仍會由快照提供原有歷史資料。也可手動執行：
+
+```bash
+npm run migrate:eco4cycles
+```
+
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
 ## Setup

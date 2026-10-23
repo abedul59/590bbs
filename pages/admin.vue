@@ -3,9 +3,10 @@
     
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold text-gray-800">後台管理中心</h2>
-      <button v-if="isAuthenticated" @click="logout" class="text-gray-500 hover:text-red-600 text-sm font-bold flex items-center gap-1 transition">
-        🚪 登出
-      </button>
+      <div class="flex items-center gap-3">
+        <NuxtLink to="/" class="text-blue-600 hover:text-blue-800 text-sm font-bold flex items-center gap-1 transition">🏠 返回首頁</NuxtLink>
+        <button v-if="isAuthenticated" @click="logout" class="text-gray-500 hover:text-red-600 text-sm font-bold flex items-center gap-1 transition">🚪 登出</button>
+      </div>
     </div>
 
     <div v-if="!isAuthenticated" class="space-y-4 max-w-md mx-auto py-20">
