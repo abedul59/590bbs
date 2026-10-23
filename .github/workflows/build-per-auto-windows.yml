@@ -31,7 +31,7 @@ jobs:
       - name: Validate and test Python source
         run: |
           python -m py_compile tools/per_auto/PER_auto.py
-          python -m unittest tools/per_auto/test_per_auto.py
+          python tools/per_auto/test_per_auto.py
       - name: Build Windows executable
         run: >-
           pyinstaller --noconfirm --clean --onefile --console
