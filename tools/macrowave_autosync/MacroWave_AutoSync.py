@@ -13,6 +13,7 @@ import traceback
 import json
 import fnmatch
 import xlrd 
+from io import StringIO
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -181,8 +182,8 @@ class MacroWaveA_Logic:
         for key, url in urls.items():
             try:
                 r = requests.get(url, headers=self.headers, verify=False, timeout=10)
-                df = pd.read_html(r.text)[0]
-                results[key] = float(df.iloc[0][1])
+                df = pd.read_html(StringIO(r.text))[0]
+                results[key] = float(df.iloc[0, 1])
             except: 
                 results[key] = 0.0
         return results.get('3M', 0), results.get('10Y', 0)
@@ -417,8 +418,8 @@ class MacroWaveBC_Logic:
             try:
                 dfs = pd.read_excel(target_file)
                 lastone = dfs.tail(7)
-                MVTime = str(lastone.iloc[0][0])
-                try: MVNum = float(lastone.iloc[0][5])
+                MVTime = str(lastone.iloc[0, 0])
+                try: MVNum = float(lastone.iloc[0, 5])
                 except: MVNum = 0.0
                 return MVTime, MVNum
             except Exception as e:
@@ -534,11 +535,11 @@ class MacroWaveBC_Logic:
                 df = pd.read_excel(target_file)
                 last = df.tail(1)
                 try:
-                    date_val = str(last.iloc[0][0])[:10]
-                    prob_val = f"{round(float(last.iloc[0][5])*100, 2)}%" 
+                    date_val = str(last.iloc[0, 0])[:10]
+                    prob_val = f"{round(float(last.iloc[0, 5])*100, 2)}%" 
                     return date_val, prob_val
                 except Exception as ex:
-                    return str(last.iloc[0][0])[:10], "Error"
+                    return str(last.iloc[0, 0])[:10], "Error"
             except Exception as e: pass
         return "N/A", "N/A"
 
@@ -628,8 +629,8 @@ class MacroWaveD_Logic:
         try:
             url = "https://www.cnyes.com/futures/html5chart/JP10YY.html"
             r = requests.get(url, headers=self.headers, verify=False, timeout=10)
-            df = pd.read_html(r.text)[0]
-            val = float(df.iloc[0][1])
+            df = pd.read_html(StringIO(r.text))[0]
+            val = float(df.iloc[0, 1])
             if val > 0: return val
         except: pass
 
@@ -970,7 +971,7 @@ class MacroWaveJSON_Logic:
 # ==========================================
 # 主流程 (Headless Main)
 # ==========================================
-def upload_json(target_name, url, json_data, headers, timeout=60):
+def upload_json(target_name, url, json_data, headers, timeout=60, multipart_fallback=False):
     """上傳同一份資料至單一網站，並回傳是否成功。"""
     log_msg(f"-> 正在上傳至 {target_name}...")
     try:
@@ -978,6 +979,20 @@ def upload_json(target_name, url, json_data, headers, timeout=60):
         if 200 <= response.status_code < 300:
             log_msg(f"✅ {target_name} 上傳成功！")
             return True
+
+        if multipart_fallback and response.status_code == 400:
+            log_msg(f"-> {target_name} 不接受直接 JSON，改用 JSON 檔案格式重試...")
+            file_content = json.dumps(json_data, ensure_ascii=False).encode("utf-8")
+            response = requests.post(
+                url,
+                files={"file": ("macrowave_data.json", file_content, "application/json")},
+                headers=headers,
+                timeout=timeout,
+            )
+            if 200 <= response.status_code < 300:
+                log_msg(f"✅ {target_name} 上傳成功（JSON 檔案相容模式）！")
+                return True
+
         detail = response.text[:500].replace('\n', ' ')
         log_msg(f"⚠️ {target_name} 上傳失敗 (HTTP {response.status_code}): {detail}")
     except Exception as error:
@@ -1081,6 +1096,7 @@ def main():
         json_data,
         headers,
         timeout=60,
+        multipart_fallback=True,
     )
 
     print("\n==============================================")

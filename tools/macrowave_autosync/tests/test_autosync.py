@@ -108,6 +108,29 @@ class UploadJsonTests(unittest.TestCase):
     def test_network_failure_does_not_raise(self, _post):
         self.assertFalse(autosync.upload_json("offline", "https://example.invalid", {}, {}))
 
+    @patch.object(autosync.requests, "post")
+    def test_retries_http_400_as_json_file_when_enabled(self, post):
+        post.side_effect = [
+            Mock(status_code=400, text='{"status":"error","message":"未找到有效數據"}'),
+            Mock(status_code=200, text='{"status":"success"}'),
+        ]
+
+        result = autosync.upload_json(
+            "Render",
+            "https://macrowave-web.onrender.com/api/upload/",
+            {"date": "2026-10-23", "value": "中文"},
+            {"X-Api-Key": "test"},
+            multipart_fallback=True,
+        )
+
+        self.assertTrue(result)
+        self.assertEqual(post.call_count, 2)
+        retry_files = post.call_args_list[1].kwargs["files"]
+        filename, content, content_type = retry_files["file"]
+        self.assertEqual(filename, "macrowave_data.json")
+        self.assertEqual(content_type, "application/json")
+        self.assertEqual(json.loads(content.decode("utf-8"))["value"], "中文")
+
 
 if __name__ == "__main__":
     unittest.main()

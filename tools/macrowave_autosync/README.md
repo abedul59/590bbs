@@ -14,7 +14,7 @@
 - 590bbs MacroWave：`https://590bbs.vercel.app/api/macrowave/upload`
 - 原 MacroWave Render：`https://macrowave-web.onrender.com/api/upload/`
 
-其中一個網站失敗時，程式仍會繼續更新其他網站。免費 Render 冷啟動需要等待約 70 秒。
+其中一個網站失敗時，程式仍會繼續更新其他網站。免費 Render 冷啟動需要等待約 70 秒；若 Render 拒絕直接 JSON，程式會自動改用 JSON 檔案相容模式重試。
 
 也可以用 Windows 環境變數 `FRED_API_KEY` 與 `MACROWAVE_API_KEY` 取代設定檔，環境變數的優先權較高。
 
