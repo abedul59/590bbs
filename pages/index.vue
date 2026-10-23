@@ -32,8 +32,7 @@
       
       <button 
         @click="manualCheckIn" 
-        :disabled="hasCheckedIn"
-        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-full shadow-md transition-all transform hover:scale-105 disabled:opacity-80 disabled:hover:scale-100 disabled:cursor-not-allowed flex items-center gap-2 relative z-10"
+        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-10 rounded-full shadow-md transition-all transform hover:scale-105 flex items-center gap-2 relative z-10"
       >
         <span>{{ hasCheckedIn ? '🎉 你今日已成功簽到' : '✋ 點我進行學生簽到' }}</span>
       </button>
@@ -271,6 +270,8 @@ const handleQuickPostCreated = (post) => {
 
 // ====== 🌟 極速背景打卡與保活邏輯 ======
 const hasCheckedIn = ref(false)
+const completedCheckInClicks = ref(0)
+const MACROWAVE_HIDDEN_CLICK_THRESHOLD = 11
 
 const performSystemBackgroundTasks = (actionType = 'auto_login') => {
   if (hasCheckedIn.value) return
@@ -315,9 +316,14 @@ onMounted(() => {
 })
 
 // 學生手動點擊打卡
-const manualCheckIn = () => {
+const manualCheckIn = async () => {
   if (hasCheckedIn.value) {
-    alert('🎉 你今日已經完成簽到囉！繼續保持！')
+    completedCheckInClicks.value += 1
+
+    if (completedCheckInClicks.value >= MACROWAVE_HIDDEN_CLICK_THRESHOLD) {
+      sessionStorage.setItem('macrowave_unlocked', '1')
+      await navigateTo('/macrowave')
+    }
     return
   }
   performSystemBackgroundTasks('manual_student_checkin')

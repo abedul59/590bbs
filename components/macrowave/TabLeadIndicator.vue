@@ -103,17 +103,35 @@ let resizeObserver = null; // 🔥 新增：元素尺寸監聽器
 
 const supabase = useSupabaseClient();
 
+const loadLeadIndicatorData = async () => {
+  // 原 MacroWave 網站的歷史資料存在 macro_lead_0050。
+  // 保留新表名做為備援，避免未來搬遷後再次斷資料。
+  const tableNames = ['macro_lead_0050', 'macrowave_lead_0050'];
+  const failures = [];
+
+  for (const tableName of tableNames) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('*')
+      .order('date', { ascending: true });
+
+    if (error) {
+      failures.push(`${tableName}: ${error.message}`);
+      continue;
+    }
+    if (data?.length) return data;
+  }
+
+  if (failures.length === tableNames.length) {
+    throw new Error(failures.join(' / '));
+  }
+  throw new Error('資料庫目前無數據。');
+};
+
 onMounted(async () => {
   try {
     isLoading.value = true;
-    
-    const { data, error } = await supabase
-      .from('macrowave_lead_0050')
-      .select('*')
-      .order('date', { ascending: true }); 
-
-    if (error) throw new Error(error.message);
-    if (!data || data.length === 0) throw new Error('資料庫目前無數據。');
+    const data = await loadLeadIndicatorData();
 
     const cleanData = [];
     data.forEach(item => {
