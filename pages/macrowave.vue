@@ -25,7 +25,7 @@
         <h1>📈 總大六大指標和本益比區間分析</h1>
         <p>台股六大基本面指標、EPS 試算與本益比價格區間</p>
       </header>
-      <StockDashboardDashboard />
+      <StockIndicatorDashboard />
     </section>
     <section v-else class="tool-chooser">
       <div class="chooser-panel">
@@ -62,6 +62,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTodayPassword } from '@/utils/auth'
+import StockIndicatorDashboard from '@/components/stock-dashboard/Dashboard.vue'
 
 useHead({
   title: '隱藏總經工具後台',
