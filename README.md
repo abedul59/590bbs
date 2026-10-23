@@ -52,6 +52,20 @@ supabase/migrations/202610230001_create_eco4cycles_records.sql
 npm run migrate:eco4cycles
 ```
 
+## 總大六大指標和本益比區間分析
+
+隱藏入口 `/macrowave?view=stock-dashboard` 整合自 `abedul59/stock-dashboard-nuxt`，保留股票清單、JSON 上傳、雲端分析、即時股價、六大指標、EPS 模擬與本益比區間試算。首次啟用專用資料表時，請在目標 Supabase SQL Editor 執行：
+
+```text
+supabase/migrations/202610230002_create_stock_dashboard_data.sql
+```
+
+推送到 `main` 後，`Migrate stock dashboard history` 工作流程會從原站匯出 `stock_data` 紀錄。若專用表尚未建立，畫面會由部署快照提供資料，新的 JSON 上傳則會保存到既有 `macrowave_dashboard_data`，不會因缺少資料表而遺失。也可手動執行：
+
+```bash
+npm run migrate:stock-dashboard
+```
+
 Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
 
 ## Setup

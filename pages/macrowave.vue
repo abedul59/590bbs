@@ -5,6 +5,7 @@
       <div class="private-tools-actions">
         <button :class="{ active: selectedView === 'macrowave' }" @click="selectView('macrowave')">📊 MacroWave</button>
         <button :class="{ active: selectedView === 'eco4cycles' }" @click="selectView('eco4cycles')">🔄 Eco4Cycles</button>
+        <button :class="{ active: selectedView === 'stock-dashboard' }" @click="selectView('stock-dashboard')">📈 六大指標與本益比</button>
         <button v-if="selectedView" @click="showChooser">選擇工具</button>
         <button @click="returnToAdmin">返回後台</button>
         <button @click="returnHome">返回首頁</button>
@@ -19,17 +20,27 @@
       </header>
       <Eco4cyclesDashboard />
     </section>
+    <section v-else-if="selectedView === 'stock-dashboard'" class="stock-dashboard-view">
+      <header class="stock-dashboard-title">
+        <h1>📈 總大六大指標和本益比區間分析</h1>
+        <p>台股六大基本面指標、EPS 試算與本益比價格區間</p>
+      </header>
+      <StockDashboardDashboard />
+    </section>
     <section v-else class="tool-chooser">
       <div class="chooser-panel">
         <p class="chooser-kicker">PRIVATE CONSOLE</p>
         <h1>選擇要進入的總經工具</h1>
-        <p>兩個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
+        <p>三個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
         <div class="tool-grid">
           <button class="tool-card macrowave-card" @click="selectView('macrowave')">
             <span>📊</span><strong>MacroWave 總經戰情室</strong><small>台美市場、領先指標與風險監控</small>
           </button>
           <button class="tool-card cycles-card" @click="selectView('eco4cycles')">
             <span>🔄</span><strong>Eco4Cycles 景氣循環</strong><small>景氣四階段判定與歷史資料</small>
+          </button>
+          <button class="tool-card stock-dashboard-card" @click="selectView('stock-dashboard')">
+            <span>📈</span><strong>總大六大指標和本益比區間分析</strong><small>六大指標、EPS 模擬與本益比價格區間</small>
           </button>
         </div>
       </div>
@@ -63,7 +74,7 @@ const macrowaveMode = useState('macrowaveMode', () => false)
 const unlocked = ref(false)
 const password = ref('')
 const errorMessage = ref('')
-const selectedView = computed(() => ['macrowave', 'eco4cycles'].includes(String(route.query.view)) ? String(route.query.view) : '')
+const selectedView = computed(() => ['macrowave', 'eco4cycles', 'stock-dashboard'].includes(String(route.query.view)) ? String(route.query.view) : '')
 
 macrowaveMode.value = true
 
@@ -103,7 +114,7 @@ onBeforeUnmount(() => {
 .chooser-panel { width: min(900px, 100%); padding: clamp(1.5rem, 5vw, 3.5rem); border-radius: 1.5rem; color: #fff; background: #ffffff12; border: 1px solid #ffffff30; box-shadow: 0 25px 70px #0004; backdrop-filter: blur(12px); }
 .chooser-panel h1 { margin-bottom: .75rem; font-weight: 900; }
 .chooser-kicker { letter-spacing: .18em; color: #67e8f9; font-size: .78rem; font-weight: 800; }
-.tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 2rem; }
+.tool-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 2rem; }
 .tool-card { min-height: 210px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: .7rem; padding: 1.5rem; border: 0; border-radius: 1.2rem; color: #fff; text-align: left; transition: transform .2s ease, box-shadow .2s ease; }
 .tool-card:hover { transform: translateY(-5px); box-shadow: 0 18px 35px #0004; }
 .tool-card span { font-size: 2.6rem; }
@@ -111,10 +122,15 @@ onBeforeUnmount(() => {
 .tool-card small { opacity: .86; }
 .macrowave-card { background: linear-gradient(135deg, #2563eb, #0891b2); }
 .cycles-card { background: linear-gradient(135deg, #059669, #0f766e); }
+.stock-dashboard-card { background: linear-gradient(135deg, #7c3aed, #db2777); }
 .eco4cycles-view { min-height: calc(100vh - 62px); padding-bottom: 2rem; background: #f8f9fa; }
 .eco4cycles-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #065f46, #0f766e); }
 .eco4cycles-title h1 { margin: 0 0 .35rem; font-weight: 900; }
 .eco4cycles-title p { margin: 0; opacity: .88; }
+.stock-dashboard-view { min-height: calc(100vh - 62px); padding-bottom: 2rem; background: #f8f9fa; }
+.stock-dashboard-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #4c1d95, #be185d); }
+.stock-dashboard-title h1 { margin: 0 0 .35rem; font-weight: 900; }
+.stock-dashboard-title p { margin: 0; opacity: .88; }
 .macrowave-login { background: linear-gradient(135deg, #eef2ff 0%, #ecfeff 100%); }
 .macrowave-login .card { max-width: 26rem; }
 @media (max-width: 700px) {
