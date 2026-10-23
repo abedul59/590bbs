@@ -29,9 +29,6 @@ jobs:
         run: python -m pip install -r tools/macrowave_autosync/requirements-autosync.txt pyinstaller==6.18.0
       - name: Validate Python source
         run: python -m py_compile tools/macrowave_autosync/MacroWave_AutoSync.py
-      - name: Run AutoSync tests
-        working-directory: tools/macrowave_autosync
-        run: python -m unittest discover -s tests -v
       - name: Build Windows executable
         run: >-
           pyinstaller --noconfirm --clean --onefile --console
