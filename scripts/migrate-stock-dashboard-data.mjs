@@ -37,7 +37,8 @@ const stocks = Array.isArray(index.availableStocks) ? index.availableStocks : []
 const requests = []
 for (const stock of stocks) {
   requests.push(`/api/stock?id=${encodeURIComponent(stock.id)}`)
-  for (let year = 2026; year <= 2036; year++) {
+  // 原介面從 2026 年啟用；未來年份不可能已有歷史紀錄，避免對舊站產生大量空查詢。
+  for (let year = 2026; year <= new Date().getUTCFullYear(); year++) {
     for (let month = 1; month <= 12; month++) {
       requests.push(`/api/stock?id=${encodeURIComponent(stock.id)}&year=${year}&month=${month}`)
     }
