@@ -105,7 +105,7 @@ const supabase = useSupabaseClient();
 
 const loadBundledFallbackData = async () => {
   const staticData = await $fetch('/macrowave-lead-data.json').catch(() => null);
-  if (staticData?.length) return staticData;
+  if (Array.isArray(staticData) && staticData.length >= 180) return staticData;
 
   const [indicators, priceResponse] = await Promise.all([
     $fetch('/macrowave-leading-indicators.json'),
