@@ -89,6 +89,18 @@ class Mark17Tests(unittest.TestCase):
         self.assertTrue(all(row["status"] == "Unavailable" for row in fred_rows))
 
 
+class LeadingIndicatorTests(unittest.TestCase):
+    def test_parses_conference_board_leading_index_without_using_percent_change(self):
+        text = "The U.S. LEI fell by 0.3 percent in September to 98.4 (2016=100)."
+
+        self.assertEqual(autosync.MacroWaveBC_Logic.parse_us_leading_index(text), "98.4")
+
+    def test_returns_none_when_text_only_contains_a_percentage(self):
+        text = "The Leading Economic Index declined 0.3 percent during the month."
+
+        self.assertIsNone(autosync.MacroWaveBC_Logic.parse_us_leading_index(text))
+
+
 class UploadJsonTests(unittest.TestCase):
     @patch.object(autosync.requests, "post")
     def test_accepts_any_success_status(self, post):

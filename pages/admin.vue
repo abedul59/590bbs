@@ -1,7 +1,7 @@
 <template>
-  <div :class="['bg-white transition-colors duration-300 relative min-h-[80vh]', activeTab === 'AdminMacrowave' ? 'm-0 min-h-screen p-0 rounded-none shadow-none' : 'mt-10 p-4 md:p-8 rounded-xl shadow-lg']">
+  <div class="bg-white transition-colors duration-300 relative min-h-[80vh] mt-10 p-4 md:p-8 rounded-xl shadow-lg">
     
-    <div v-if="activeTab !== 'AdminMacrowave'" class="flex justify-between items-center mb-6">
+    <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold text-gray-800">後台管理中心</h2>
       <button v-if="isAuthenticated" @click="logout" class="text-gray-500 hover:text-red-600 text-sm font-bold flex items-center gap-1 transition">
         🚪 登出
@@ -24,7 +24,7 @@
 
     <div v-else class="animate-fade-in flex flex-col h-full">
       
-      <div v-if="activeTab !== 'AdminMacrowave'" class="flex flex-wrap gap-2 mb-6 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+      <div class="flex flex-wrap gap-2 mb-6 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
         <button @click="activeTab = 'AdminSystem'" :class="activeTab === 'AdminSystem' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-200/50'" class="flex-1 md:flex-none px-4 py-2.5 rounded-lg font-bold text-sm transition-all duration-200">
           ⚙️ 系統設定與保活
         </button>
@@ -62,7 +62,6 @@
         <AdminPublic v-if="activeTab === 'AdminPublic'" />
         <AdminCheckins v-if="activeTab === 'AdminCheckins'" />
         <AdminCron v-if="activeTab === 'AdminCron'" />
-        <LazyAdminMacrowave v-if="activeTab === 'AdminMacrowave'" @exit="closePrivateConsole" />
       </div>
 
     </div>
@@ -89,7 +88,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { getTodayPassword } from '@/utils/auth'
 
 const isAuthenticated = ref(false)
@@ -102,7 +101,6 @@ const showPrivateLogin = ref(false)
 const privatePassword = ref('')
 const privateError = ref('')
 const privatePasswordInput = ref(null)
-const macrowaveMode = useState('macrowaveMode', () => false)
 
 const openPrivateConsole = async () => {
   privatePassword.value = ''
@@ -124,13 +122,8 @@ const unlockPrivateConsole = () => {
     return
   }
   closePrivateLogin()
-  activeTab.value = 'AdminMacrowave'
-  macrowaveMode.value = true
-}
-
-const closePrivateConsole = () => {
-  macrowaveMode.value = false
-  activeTab.value = 'AdminSystem'
+  sessionStorage.setItem('macrowave_unlocked', '1')
+  navigateTo('/macrowave')
 }
 
 const login = () => {
@@ -151,9 +144,6 @@ const logout = () => {
   navigateTo('/')
 }
 
-onBeforeUnmount(() => {
-  macrowaveMode.value = false
-})
 </script>
 
 <style scoped>

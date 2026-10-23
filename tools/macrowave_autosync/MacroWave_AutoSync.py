@@ -544,30 +544,75 @@ class MacroWaveBC_Logic:
         return "N/A", "N/A"
 
     def get_us_li(self):
-        val = "N/A"
+        """抓取美國領先指標，依官方、FRED、新聞順序使用備援。"""
         date_str = datetime.datetime.now().strftime("%Y-%m")
+
+        try:
+            log_msg("抓取美國領先指標 (Conference Board)...")
+            response = requests.get(
+                "https://www.conference-board.org/topics/us-leading-indicators",
+                headers={'User-Agent': 'Mozilla/5.0'},
+                timeout=15,
+            )
+            response.raise_for_status()
+            page_text = BeautifulSoup(response.text, 'html.parser').get_text(" ", strip=True)
+            value = self.parse_us_leading_index(page_text)
+            if value is not None:
+                log_msg(f"LEI 抓取成功 (Conference Board): {value}")
+                return value, f"{date_str} (Conference Board)"
+        except Exception as error:
+            log_msg(f"Conference Board LEI 抓取失敗: {error}")
+
+        if self.fred:
+            try:
+                log_msg("改用 FRED OECD 領先指標備援...")
+                series = self.fred.get_series('USALOLITONOSTSAM').dropna()
+                if not series.empty:
+                    value = self.format_indicator_value(series.iloc[-1])
+                    series_date = series.index[-1].strftime("%Y-%m")
+                    log_msg(f"LEI 抓取成功 (FRED OECD): {value}")
+                    return value, f"{series_date} (FRED OECD)"
+            except Exception as error:
+                log_msg(f"FRED OECD 領先指標抓取失敗: {error}")
+
         driver = None
         try:
-            log_msg("爬取美國領先指標 (Google News)...")
+            log_msg("改用 Google News 抓取美國領先指標...")
             driver = self.get_driver()
             url = "https://www.google.com/search?q=US+Conference+Board+Leading+Economic+Index+latest&gl=us&hl=en&tbm=nws"
             driver.get(url)
             wait = WebDriverWait(driver, 15)
             wait.until(EC.presence_of_element_located((By.ID, "search")))
             body_text = driver.find_element(By.TAG_NAME, "body").text
-            matches = re.findall(r'(?:LEI|Leading Economic Index).*?(?:to|at)\s*((?:9\d|1\d{2})\.\d)', body_text, re.IGNORECASE)
-            if not matches:
-                matches = re.findall(r'(?:LEI|Leading Economic Index).*?((?:9\d|1\d{2})\.\d)', body_text, re.IGNORECASE)
-            if matches:
-                val = matches[0]
-                date_str += " (News)"
+            value = self.parse_us_leading_index(body_text)
+            if value is not None:
+                log_msg(f"LEI 抓取成功 (Google News): {value}")
+                return value, f"{date_str} (Google News)"
         except Exception as e: 
             log_msg(f"LEI 抓取失敗: {e}")
         finally:
             if driver:
                 try: driver.quit() 
                 except: pass
-        return val, date_str
+        return "N/A", date_str
+
+    @staticmethod
+    def format_indicator_value(value):
+        return f"{float(value):.3f}".rstrip('0').rstrip('.')
+
+    @classmethod
+    def parse_us_leading_index(cls, text):
+        """從 Conference Board／新聞文字中辨識 LEI 指數值，排除百分比。"""
+        normalized = re.sub(r'\s+', ' ', str(text))
+        patterns = (
+            r'(?:U\.?S\.?\s+)?(?:LEI|Leading Economic Index).{0,320}?\bto\s+((?:8\d|9\d|1\d{2})(?:\.\d+)?)\b',
+            r'(?:U\.?S\.?\s+)?(?:LEI|Leading Economic Index).{0,220}?\b(?:stood at|was|at)\s+((?:8\d|9\d|1\d{2})(?:\.\d+)?)\b',
+        )
+        for pattern in patterns:
+            match = re.search(pattern, normalized, re.IGNORECASE)
+            if match:
+                return cls.format_indicator_value(match.group(1))
+        return None
     
     def get_unrate(self):
         if not self.fred: return "N/A"

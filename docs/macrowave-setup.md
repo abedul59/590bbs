@@ -1,6 +1,6 @@
-# MacroWave 隱藏後台設定
+# MacroWave 獨立戰情室設定
 
-MacroWave 已整合至 `/admin`。管理員登入後，按「系統狀態正常」，再次輸入管理員密碼即可進入。
+MacroWave 使用獨立網址 `/macrowave`。管理員可從 `/admin` 按「系統狀態正常」並再次輸入密碼進入；通過驗證後重新整理仍會停留在 `/macrowave`，不會返回後台。
 
 ## Supabase
 

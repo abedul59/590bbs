@@ -76,6 +76,8 @@
                 </div>
             </div>
 
+            <Mark17Table :content="dashboardData.content" />
+
             <div class="col-lg-4 col-md-12 mb-4" v-if="dashboardData.content.us_jp_spread">
                 <div class="card h-100 shadow-sm border-0">
                     <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center fw-bold">
@@ -273,74 +275,6 @@
             </div>
         </div>
 
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card shadow-sm border-0">
-                    <div class="card-header bg-dark text-white fw-bold d-flex justify-content-between cursor-pointer" data-bs-toggle="collapse" href="#mark17Details">
-                        <span>📋 Mark 17 詳細計分表 (含原始數值與前值對照)</span>
-                        <small>▼ 點擊展開/收合</small>
-                    </div>
-                    <div class="collapse show" id="mark17Details">
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0 align-middle">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>監測項目</th>
-                                            <th class="text-center">數值 / 狀態</th>
-                                            <th class="text-center">風險得分</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="item in dashboardData.content.mark17" :key="item.item">
-                                            <td class="fw-bold text-dark">{{ item.item.replace(/PMI/g, '美國 PMI') }}</td>
-                                            <td class="text-center">
-                                                <div :class="['fw-bold fs-6 font-monospace', 'status-' + item.status]">{{ item.value }}</div>
-                                                <div v-if="item.prev_value !== undefined && item.prev_value !== null" class="text-muted mt-1 font-monospace" style="font-size: 0.75rem;">
-                                                    (前值: {{ item.prev_value }})
-                                                </div>
-                                            </td>
-                                            <td class="text-center">
-                                                <span v-if="Number.parseFloat(item.score) > 0" class="badge bg-danger rounded-pill px-3 fs-6">
-                                                    {{ typeof item.score === 'number' && item.score > 0 ? '+' + item.score : item.score }}
-                                                </span>
-                                                <span v-else class="text-muted text-opacity-50">-</span>
-                                            </td>
-                                        </tr>
-                                        <tr v-if="!dashboardData.content.mark17?.length"><td colspan="3" class="text-center text-muted py-3">暫無數據</td></tr>
-
-                                        <tr class="table-warning border-top border-warning">
-                                            <td colspan="3" class="fw-bold text-center text-dark py-2" style="font-size: 0.85rem;">以下為通膨重點監控數值補充</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="fw-bold text-secondary">美國 CPI (消費者物價指數 YoY)</td>
-                                            <td class="text-center">
-                                                <div class="fw-bold text-dark fs-6 font-monospace">{{ dashboardData.content.raw_indicators?.CPI ?? '--' }} %</div>
-                                                <div class="text-muted mt-1 font-monospace" style="font-size: 0.75rem;">
-                                                    (前值: {{ dashboardData.content.raw_indicators?.CPI_Prev ?? '--' }} %)
-                                                </div>
-                                            </td>
-                                            <td class="text-center text-muted">-</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="fw-bold text-secondary">美國 PPI (生產者物價指數 YoY)</td>
-                                            <td class="text-center">
-                                                <div class="fw-bold text-dark fs-6 font-monospace">{{ dashboardData.content.raw_indicators?.PPI ?? '--' }} %</div>
-                                                <div class="text-muted mt-1 font-monospace" style="font-size: 0.75rem;">
-                                                    (前值: {{ dashboardData.content.raw_indicators?.PPI_Prev ?? '--' }} %)
-                                                </div>
-                                            </td>
-                                            <td class="text-center text-muted">-</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
     </div>
     <div v-else class="text-center mt-5">
         <div class="spinner-border text-primary" role="status" v-if="isLoading"></div>
@@ -351,6 +285,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import Mark17Table from './Mark17Table.vue'
 
 const rawResponseData = ref(null);
 const isLoading = ref(true);
