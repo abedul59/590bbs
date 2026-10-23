@@ -103,6 +103,34 @@ let resizeObserver = null; // 🔥 新增：元素尺寸監聽器
 
 const supabase = useSupabaseClient();
 
+const loadBundledFallbackData = async () => {
+  const staticData = await $fetch('/macrowave-lead-data.json').catch(() => null);
+  if (staticData?.length) return staticData;
+
+  const [indicators, priceResponse] = await Promise.all([
+    $fetch('/macrowave-leading-indicators.json'),
+    $fetch('/api/macrowave/lead')
+  ]);
+
+  const pricesByPeriod = new Map(
+    (priceResponse?.data || []).map(item => [item.period, Number(item.close)])
+  );
+
+  const combined = (indicators || [])
+    .map(item => ({
+      date: `${item.period}-01`,
+      close: pricesByPeriod.get(item.period),
+      lead: Number(item.lead),
+      score: Number(item.score)
+    }))
+    .filter(item => Number.isFinite(item.close));
+
+  if (!combined.length) {
+    throw new Error('0050 與台灣領先指標的月資料無法對齊。');
+  }
+  return combined;
+};
+
 const loadLeadIndicatorData = async () => {
   // 原 MacroWave 網站的歷史資料存在 macro_lead_0050。
   // 保留新表名做為備援，避免未來搬遷後再次斷資料。
@@ -122,10 +150,12 @@ const loadLeadIndicatorData = async () => {
     if (data?.length) return data;
   }
 
-  if (failures.length === tableNames.length) {
-    throw new Error(failures.join(' / '));
+  try {
+    return await loadBundledFallbackData();
+  } catch (fallbackError) {
+    const databaseDetail = failures.length ? `資料庫：${failures.join(' / ')}；` : '';
+    throw new Error(`${databaseDetail}備援資料：${fallbackError.message}`);
   }
-  throw new Error('資料庫目前無數據。');
 };
 
 onMounted(async () => {
