@@ -19,8 +19,29 @@ export default defineEventHandler(async (event) => {
   const snapshot = await readEco4CyclesSnapshot()
   if (snapshot.length) {
     // 資料表建好但仍為空時，第一次開啟就把舊站快照寫入新表。
-    if (!error) await supabase.from('eco4cycles_economic_records').upsert(snapshot, { onConflict: 'date' })
-    return { success: true, dates: snapshot.map(record => record.date).sort().reverse(), source: 'migrated-snapshot' }
+    if (!error) {
+      await supabase.from('eco4cycles_economic_records').upsert(snapshot, { onConflict: 'date' })
+    } else {
+      // 專用表尚未套用 SQL 時，先保存到已存在的 MacroWave JSON 資料表，
+      // 讓原資料確實進入目標 Supabase，而非只留在部署檔案內。
+      const { data: portableRows } = await supabase
+        .from('macrowave_dashboard_data')
+        .select('id')
+        .eq('source_type', 'Eco4Cycles database migration')
+        .limit(1)
+      if (!portableRows?.length) {
+        await supabase.from('macrowave_dashboard_data').insert({
+          source_type: 'Eco4Cycles database migration',
+          content: { schema: 1, records: snapshot }
+        })
+      }
+    }
+    return {
+      success: true,
+      dates: snapshot.map(record => record.date).sort().reverse(),
+      source: 'migrated-snapshot',
+      migrated_records: snapshot.length
+    }
   }
 
   return { success: false, error: error?.message || 'Eco4Cycles 尚無歷史資料' }

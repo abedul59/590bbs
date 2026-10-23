@@ -46,7 +46,7 @@ npm run migrate:tlogs-shjhs
 supabase/migrations/202610230001_create_eco4cycles_records.sql
 ```
 
-推送到 `main` 後，`Migrate Eco4Cycles history` 工作流程會從原站逐筆匯出歷史紀錄並保存為伺服器快照。新表為空時，第一次開啟 Eco4Cycles 會自動將快照 upsert 進新表；若表尚未建立，畫面仍會由快照提供原有歷史資料。也可手動執行：
+推送到 `main` 後，`Migrate Eco4Cycles history` 工作流程會從原站逐筆匯出歷史紀錄並保存為伺服器快照。新表為空時，第一次開啟 Eco4Cycles 會自動將快照 upsert 進新表；若表尚未建立，畫面仍會由快照提供原有歷史資料，並將完整快照保存到既有 `macrowave_dashboard_data` 資料表，確保資料已進入目標 Supabase。也可手動執行：
 
 ```bash
 npm run migrate:eco4cycles
