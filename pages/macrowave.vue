@@ -23,7 +23,10 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTodayPassword } from '@/utils/auth'
 
-useHead({ title: 'MacroWave 總經戰情室' })
+useHead({
+  title: 'MacroWave 總經戰情室',
+  link: [{ rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css' }]
+})
 
 const macrowaveMode = useState('macrowaveMode', () => false)
 const unlocked = ref(false)
