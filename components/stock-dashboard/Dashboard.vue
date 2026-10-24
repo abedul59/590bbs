@@ -88,9 +88,9 @@
           <div class="row g-3 mb-4 text-center">
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #0d6efd !important;"><small class="text-muted d-block mb-1">最新成交</small><span class="fs-5 fw-bold">{{ perData.Now_Price }}</span></div></div>
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">預估營收</small><span class="fs-5">{{ perData.Predict_Rev }}</span></div></div>
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #dc3545 !important;"><small class="text-muted d-block mb-1">{{ forecastYear }} 預估EPS</small><span class="fs-4 text-danger fw-bold">{{ perData.Predict_EPS }}</span></div></div>
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(高)</small><span class="fs-5 text-success fw-bold">{{ perData.Target_H }}</span></div></div>
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(低)</small><span class="fs-5 text-secondary fw-bold">{{ perData.Target_L }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #dc3545 !important;"><small class="text-muted d-block mb-1">{{ forecastYear }} 預估EPS</small><span class="fs-4 text-danger fw-bold">{{ forwardValuation.eps }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(高)</small><span class="fs-5 text-success fw-bold">{{ forwardValuation.targetH }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(低)</small><span class="fs-5 text-secondary fw-bold">{{ forwardValuation.targetL }}</span></div></div>
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">潛在報酬</small><span class="fs-5 text-danger fw-bold">{{ perData.Profit }}</span></div></div>
           </div>
 
@@ -111,7 +111,7 @@
                     <div class="card-body">
                       <h5 class="card-title text-secondary fw-bold mb-3 border-bottom pb-2">📊 原始預估 (JSON)</h5>
                       <ul class="list-group list-group-flush bg-transparent mb-3">
-                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>{{ forecastYear }} 預估 EPS</span><strong class="text-dark">{{ perData.Predict_EPS }}</strong></li>
+                        <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>{{ forecastYear }} 預估 EPS</span><strong class="text-dark">{{ forwardValuation.eps }}</strong></li>
                         <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>原始預估營收</span><strong>{{ perData.Predict_Rev }} 億</strong></li>
                         <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>原始營收年增率</span><strong>{{ perData.YoY_Use }}</strong></li>
                         <li class="list-group-item bg-transparent d-flex justify-content-between px-0"><span>平均淨利率</span><strong>{{ perData.Net_Avg }}</strong></li>
@@ -211,9 +211,9 @@
             <div class="tab-pane fade show active" id="tab-hist">
               <div class="alert alert-info py-2 small">
                 <strong>{{ forecastYear }} 本益比區間：</strong>
-                預估 EPS {{ perData.Predict_EPS }} × 歷史 PE
+                預估 EPS {{ forwardValuation.eps }} × 歷史 PE
                 （高 {{ perData.PE_Use_H }}／低 {{ perData.PE_Use_L }}）＝
-                目標價 {{ perData.Target_L }}～{{ perData.Target_H }}。
+                目標價 {{ forwardValuation.targetL }}～{{ forwardValuation.targetH }}。
               </div>
               <div class="table-responsive">
                 <table class="table table-bordered table-striped text-center align-middle">
@@ -221,8 +221,8 @@
                   <tbody>
                     <tr class="table-warning fw-bold">
                       <td>{{ forecastYear }}/{{ forecastYearRoc }}(預估)</td>
-                      <td class="text-danger">{{ perData.Target_H }}</td><td class="text-success">{{ perData.Target_L }}</td>
-                      <td class="text-primary">{{ perData.Predict_EPS }}</td><td>-</td><td>-</td>
+                      <td class="text-danger">{{ forwardValuation.targetH }}</td><td class="text-success">{{ forwardValuation.targetL }}</td>
+                      <td class="text-primary">{{ forwardValuation.eps }}</td><td>-</td><td>-</td>
                     </tr>
                     <tr v-for="(row, index) in histRows" :key="index">
                       <td>{{ row.year_str }} <span v-if="index === 0 && perData.EPS1_Is_Est">(預)</span></td>
@@ -368,6 +368,31 @@ const forecastYear = computed(() => {
 const forecastYearRoc = computed(() => {
   const explicitYear = Number(perData.value.Forecast_Year_ROC)
   return explicitYear > 0 ? explicitYear : forecastYear.value - 1911
+})
+
+// 舊 JSON 的營收已外推到下一年，但 EPS/目標價仍停在當年；顯示時即時修正。
+const forwardValuation = computed(() => {
+  const per = perData.value
+  let eps = Number(per.Predict_EPS || 0)
+  const currentYear = Number(per.Current_Year || forecastYear.value)
+  const isLegacyNextYear = !Number(per.Forecast_Year) && forecastYear.value > currentYear
+  if (isLegacyNextYear) {
+    const revenue = Number(per.Predict_Rev || 0)
+    const margin = parsePct(per.Net_Avg)
+    const capital = Number(per.Capital || 0)
+    if (revenue > 0 && margin !== 0 && capital > 0) {
+      eps = Number(((revenue * margin / capital) * 10).toFixed(2))
+    }
+  }
+
+  const peH = Number(per.PE_Use_H || 0)
+  const peL = Number(per.PE_Use_L || 0)
+  const shouldRecalculateTargets = isLegacyNextYear && eps > 0
+  return {
+    eps,
+    targetH: shouldRecalculateTargets ? Number((eps * peH).toFixed(2)) : Number(per.Target_H || 0),
+    targetL: shouldRecalculateTargets ? Number((eps * peL).toFixed(2)) : Number(per.Target_L || 0)
+  }
 })
 
 // === API：獲取初始股票清單 ===
@@ -590,7 +615,7 @@ const q4Rows = computed(() => {
     { label: "---", val: "---" },
     { label: "估值年度", val: `${forecastYear.value}/${forecastYearRoc.value}` },
     { label: `${forecastYear.value} 預估營收`, val: per.Predict_Rev || 0 },
-    { label: `${forecastYear.value} 預估 EPS`, val: per.Predict_EPS || 0 },
+    { label: `${forecastYear.value} 預估 EPS`, val: forwardValuation.value.eps },
     { label: "預估方法", val: per.Forecast_Method || "預估營收 × 平均淨利率 ÷ 股本 × 10" }
   ]
 })
