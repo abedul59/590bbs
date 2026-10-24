@@ -6,6 +6,8 @@
         <button :class="{ active: selectedView === 'macrowave' }" @click="selectView('macrowave')">📊 MacroWave</button>
         <button :class="{ active: selectedView === 'eco4cycles' }" @click="selectView('eco4cycles')">🔄 Eco4Cycles</button>
         <button :class="{ active: selectedView === 'stock-dashboard' }" @click="selectView('stock-dashboard')">📈 六大指標與本益比</button>
+        <button :class="{ active: selectedView === 'twstocktracker' }" @click="selectView('twstocktracker')">📊 台股資金流向</button>
+        <button :class="{ active: selectedView === 'moneydam' }" @click="selectView('moneydam')">💧 六大水庫資金流向</button>
         <button v-if="selectedView" @click="showChooser">選擇工具</button>
         <button @click="returnToAdmin">返回後台</button>
         <button @click="returnHome">返回首頁</button>
@@ -27,11 +29,21 @@
       </header>
       <StockIndicatorDashboard />
     </section>
+    <section v-else-if="selectedView === 'twstocktracker'" class="twstocktracker-view">
+      <header class="twstocktracker-title">
+        <h1>📊 台股資金流向儀表板</h1>
+        <p>上市、上櫃、興櫃類股平均數據與成交額 Top 30</p>
+      </header>
+      <TwstocktrackerDashboard />
+    </section>
+    <section v-else-if="selectedView === 'moneydam'" class="moneydam-view">
+      <MoneydamDashboard />
+    </section>
     <section v-else class="tool-chooser">
       <div class="chooser-panel">
         <p class="chooser-kicker">PRIVATE CONSOLE</p>
         <h1>選擇要進入的總經工具</h1>
-        <p>三個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
+        <p>五個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
         <div class="tool-grid">
           <button class="tool-card macrowave-card" @click="selectView('macrowave')">
             <span>📊</span><strong>MacroWave 總經戰情室</strong><small>台美市場、領先指標與風險監控</small>
@@ -41,6 +53,12 @@
           </button>
           <button class="tool-card stock-dashboard-card" @click="selectView('stock-dashboard')">
             <span>📈</span><strong>總大六大指標和本益比區間分析</strong><small>六大指標、EPS 模擬與本益比價格區間</small>
+          </button>
+          <button class="tool-card twstocktracker-card" @click="selectView('twstocktracker')">
+            <span>📊</span><strong>台股資金流向儀表板</strong><small>類股平均漲跌、成交量與成交額 Top 30</small>
+          </button>
+          <button class="tool-card moneydam-card" @click="selectView('moneydam')">
+            <span>💧</span><strong>六大水庫資金流向分析</strong><small>外匯、債券、通膨、銀行與房地產資金流向</small>
           </button>
         </div>
       </div>
@@ -63,6 +81,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getTodayPassword } from '@/utils/auth'
 import StockIndicatorDashboard from '@/components/stock-dashboard/Dashboard.vue'
+import TwstocktrackerDashboard from '@/components/twstocktracker/Dashboard.vue'
+import MoneydamDashboard from '@/components/moneydam/Dashboard.vue'
 
 useHead({
   title: '隱藏總經工具後台',
@@ -75,7 +95,7 @@ const macrowaveMode = useState('macrowaveMode', () => false)
 const unlocked = ref(false)
 const password = ref('')
 const errorMessage = ref('')
-const selectedView = computed(() => ['macrowave', 'eco4cycles', 'stock-dashboard'].includes(String(route.query.view)) ? String(route.query.view) : '')
+const selectedView = computed(() => ['macrowave', 'eco4cycles', 'stock-dashboard', 'twstocktracker', 'moneydam'].includes(String(route.query.view)) ? String(route.query.view) : '')
 
 macrowaveMode.value = true
 
@@ -124,6 +144,8 @@ onBeforeUnmount(() => {
 .macrowave-card { background: linear-gradient(135deg, #2563eb, #0891b2); }
 .cycles-card { background: linear-gradient(135deg, #059669, #0f766e); }
 .stock-dashboard-card { background: linear-gradient(135deg, #7c3aed, #db2777); }
+.twstocktracker-card { background: linear-gradient(135deg, #ea580c, #dc2626); }
+.moneydam-card { background: linear-gradient(135deg, #059669, #0f766e); }
 .eco4cycles-view { min-height: calc(100vh - 62px); padding-bottom: 2rem; background: #f8f9fa; }
 .eco4cycles-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #065f46, #0f766e); }
 .eco4cycles-title h1 { margin: 0 0 .35rem; font-weight: 900; }
@@ -132,6 +154,11 @@ onBeforeUnmount(() => {
 .stock-dashboard-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #4c1d95, #be185d); }
 .stock-dashboard-title h1 { margin: 0 0 .35rem; font-weight: 900; }
 .stock-dashboard-title p { margin: 0; opacity: .88; }
+.twstocktracker-view { min-height: calc(100vh - 62px); background: #f8fafc; }
+.twstocktracker-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #c2410c, #b91c1c); }
+.twstocktracker-title h1 { margin: 0 0 .35rem; font-weight: 900; }
+.twstocktracker-title p { margin: 0; opacity: .88; }
+.moneydam-view { min-height: calc(100vh - 62px); }
 .macrowave-login { background: linear-gradient(135deg, #eef2ff 0%, #ecfeff 100%); }
 .macrowave-login .card { max-width: 26rem; }
 @media (max-width: 700px) {
