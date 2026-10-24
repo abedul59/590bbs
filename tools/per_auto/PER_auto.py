@@ -33,6 +33,21 @@ def get_headers():
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
     }
 
+def build_source_urls(stock_id):
+    """集中管理輸出 JSON 與網頁核對區使用的原始資料網址。"""
+    return {
+        'Revenue': f'https://djinfo.cathaysec.com.tw/z/zc/zch/zch_{stock_id}.djhtm',
+        'FinancialRatios': f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm',
+        'QuarterlyIncome': f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_{stock_id}.djhtm',
+        'QuarterlyCashFlow': f'https://djinfo.cathaysec.com.tw/z/zc/zc3/zc3_{stock_id}.djhtm',
+        'AnnualEPS': f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq0.djhtm?b=Y&a={stock_id}',
+        'QuarterlyEPS': f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq.djhtm?b=Y&a={stock_id}',
+        'Capital': f'https://djinfo.cathaysec.com.tw/z/zc/zcp/zcpa_{stock_id}.djhtm',
+        'TWSEAnnualPrice': f'https://www.twse.com.tw/exchangeReport/FMNPTK?response=html&stockNo={stock_id}',
+        'TPEXAnnualPrice': 'https://www.tpex.org.tw/zh-tw/mainboard/trading/info/stock-year.html',
+        'YahooQuote': f'https://tw.stock.yahoo.com/quote/{stock_id}',
+    }
+
 def fetch_soup(url, encoding='cp950'):
     try:
         r = requests.get(url, headers=get_headers(), timeout=REQUEST_TIMEOUT)
@@ -344,6 +359,7 @@ def get_latest_price(stock_id):
 # ==============================================================================
 def Stock6x_Analysis(stock_id):
     data = {'Name': get_stock_name_robust(stock_id)}
+    sources = build_source_urls(stock_id)
 
     rev_result = {'Label': '營收年增率', 'Rating': '不評分', 'Data': [], 'Extra': {}}
     revenue_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zch/zch_{stock_id}.djhtm', 'cp950')
@@ -367,6 +383,8 @@ def Stock6x_Analysis(stock_id):
     except (IndexError, ValueError, TypeError) as exc:
         rev_result['Reason'] = f"營收資料解析失敗：{exc}"
     data['Rev'] = rev_result
+    data['Rev']['Formula'] = 'Avg6＝近6月YoY合計÷6；AA＝Avg6>25%且最新月未降，A＝Avg6 10%～25%且未降（或>25%僅小降），負成長依程度降為BB/C'
+    data['Rev']['SourceURL'] = sources['Revenue']
 
     ratio_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm', 'cp950')
     operating_series = find_financial_series(ratio_soup, ('營業利益率',))
@@ -378,6 +396,8 @@ def Stock6x_Analysis(stock_id):
         'Reason': op_reason,
         'Data': [{'Name': name, 'Val': f"{value:.2f}%"} for name, value in operating_series],
         'Extra': {'Avg4': f"{sum(operating_values[:4]) / 4:.2f}%"} if len(operating_values) >= 4 else {},
+        'Formula': 'Avg4＝近4季營益率÷4；季變動＝(本季－前季)÷|前季|；AA＝Avg4>15%且穩定，單季衰退≥20%依時點降為B/BB，負值為C',
+        'SourceURL': sources['FinancialRatios'],
     }
 
     income_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_{stock_id}.djhtm', 'cp950')
@@ -399,6 +419,8 @@ def Stock6x_Analysis(stock_id):
             for index, (name, value) in enumerate(net_series)
         ],
         'Extra': {'LatestYoY': f"{net_yoy[0] * 100:.2f}%"} if net_yoy else {},
+        'Formula': 'YoY＝(本季淨利－去年同季)÷|去年同季|；近3季正成長且最新加速為AA，連續衰退依程度為B/C',
+        'SourceURL': sources['QuarterlyIncome'],
     }
 
     eps_series = find_financial_series(income_soup, ('每股盈餘',))
@@ -412,6 +434,8 @@ def Stock6x_Analysis(stock_id):
         'Reason': eps_reason,
         'Data': [{'Name': name, 'Val': str(value)} for name, value in eps_series],
         'Extra': {'Trailing4Q': trailing_eps},
+        'Formula': 'TTM EPS＝最近4季EPS合計；>5為AA、3～5為A、1～3為BB、<1或最新虧損為B、TTM虧損為C',
+        'SourceURL': sources['QuarterlyIncome'],
     }
 
     inventory_series = find_financial_series(ratio_soup, ('存貨', '週轉'))
@@ -425,6 +449,8 @@ def Stock6x_Analysis(stock_id):
         'Reason': inventory_reason,
         'Data': [{'Name': name, 'Val': str(value)} for name, value in inventory_series],
         'Extra': {'Avg4': round(inventory_average, 2)},
+        'Formula': '季變動＝(本季週轉率－前季)÷前季；穩定且Avg4≥1.5為AA、穩定但<1.5為A，下降20%以上依時點為B/C',
+        'SourceURL': sources['FinancialRatios'],
     }
 
     cash_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zc3/zc3_{stock_id}.djhtm', 'cp950')
@@ -445,12 +471,15 @@ def Stock6x_Analysis(stock_id):
         'Reason': cash_reason,
         'Data': [{'Name': name, 'Val': f"{value:,.0f}"} for name, value in free_cash_series],
         'Extra': {'Sum4': round(cash_sum4, 2), 'Sum6': round(cash_sum6, 2)},
+        'Formula': '每季自由現金流＝營業現金流＋投資現金流；連6季正為AA，4季與6季累計皆正為A，轉正/轉負為BB/B，兩者皆負為C',
+        'SourceURL': sources['QuarterlyCashFlow'],
     }
 
     ratings = [data[key]['Rating'] for key in ('Rev', 'Op', 'Net', 'EPS', 'Inv', 'CF')]
     data['Average'] = str(average_rating(ratings))
     data['ScoredCount'] = sum(rating in RATING_SCORES for rating in ratings)
     data['Scale'] = '0～4'
+    data['Sources'] = sources
     return data
 
 # ==============================================================================
@@ -458,6 +487,7 @@ def Stock6x_Analysis(stock_id):
 # ==============================================================================
 def PERsegx(stock_id, month_id, six_data):
     headers = get_headers()
+    sources = build_source_urls(stock_id)
 
     now = datetime.datetime.now()
     current_year_ad = now.year
@@ -788,7 +818,16 @@ def PERsegx(stock_id, month_id, six_data):
         'epsq1N': epsq1N, 'epsq2N': epsq2N, 'epsq3N': epsq3N, # 輸出動態季別名稱
         'Q4_Rev_Actual': Q4_Rev_Actual, 'Q4_EPS_Est': Q4_EPS_Predict, 'Total_EPS_Est': Total_EPS_Predict,
         'Detect_Reason': detect_reason, 'Use_Estimation': use_estimation, 'Latest_Quarter_Str': latest_quarter_str, 'Is_Before_Deadline': is_before_deadline,
-        'Date': now.strftime("%Y-%m-%d"), 'EPS1_Is_Est': use_estimation
+        'Date': now.strftime("%Y-%m-%d"), 'EPS1_Is_Est': use_estimation,
+        'Sources': sources,
+        'Formulas': {
+            'RevenueYoY': '(本月營收－去年同月營收)÷去年同月營收×100%',
+            'CurrentYearRevenue': '已公布月份合計＋未公布月份去年值×(1＋採用 YoY)',
+            'ForecastRevenue': '完整年度基期營收×(1＋採用 YoY)',
+            'ForecastEPS': '預估營收×近四季平均淨利率÷股本×10',
+            'HistoricalPE': '年度最高／最低價÷該年度 EPS',
+            'TargetPrice': '預估 EPS×採用歷史 PE',
+        },
     }
 
 # ==============================================================================

@@ -68,6 +68,15 @@ class PerAutoTests(unittest.TestCase):
         self.assertEqual(per_auto.get_latest_price('2330'), 1495.0)
         self.assertIn('2330.TW', get.call_args.args[0])
 
+    def test_source_urls_are_stock_specific_and_auditable(self):
+        sources = per_auto.build_source_urls('2330')
+
+        self.assertIn('2330', sources['Revenue'])
+        self.assertIn('2330', sources['QuarterlyIncome'])
+        self.assertIn('2330', sources['Capital'])
+        self.assertIn('stockNo=2330', sources['TWSEAnnualPrice'])
+        self.assertTrue(sources['YahooQuote'].endswith('/2330'))
+
     @patch.object(per_auto.requests, "post")
     def test_uploads_to_both_dashboards(self, post):
         response = Mock()

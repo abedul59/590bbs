@@ -122,6 +122,7 @@
                         <p class="small text-muted mb-0">程式會先反推「基期營收」，再依據您輸入的成長率與淨利率重新計算 EPS。<br><em>(基期營收 × 新成長率 × 新淨利率) ÷ 股本</em></p>
                       </div>
                     </div>
+	              <CalculationAudit :items="simulationAuditRows" />
                   </div>
                 </div>
 
@@ -231,6 +232,7 @@
                   </tbody>
                 </table>
               </div>
+	              <CalculationAudit :items="historyAuditRows" />
             </div>
 
             <div class="tab-pane fade" id="tab-rev">
@@ -244,6 +246,7 @@
                   </tbody>
                 </table>
               </div></div>
+	              <CalculationAudit :items="revenueAuditRows" />
             </div>
 
             <div class="tab-pane fade" id="tab-net">
@@ -255,6 +258,7 @@
                   </tbody>
                 </table>
               </div></div>
+	              <CalculationAudit :items="netAuditRows" />
             </div>
 
             <div class="tab-pane fade" id="tab-six">
@@ -276,10 +280,15 @@
                         <tbody><tr v-for="(d, i) in item.Data" :key="i"><td>{{ d.Name }}</td><td>{{ d.Val }} <small v-if="d.YoY && d.YoY !== '-'" class="text-muted">({{ d.YoY }})</small></td></tr></tbody>
                       </table>
                     </div>
-                    <div class="card-footer small text-muted">判定：{{ item.Reason || '資料不足' }}</div>
+	                    <div class="card-footer small text-muted">
+	                      <div>判定：{{ item.Reason || '資料不足' }}</div>
+	                      <div class="mt-1"><code>{{ item.Formula || indicatorFormula(item.key) }}</code></div>
+                      <a :href="trustedSourceUrl(item.SourceURL, sourceUrls[item.key])" target="_blank" rel="noopener noreferrer" class="d-inline-block mt-1 text-decoration-none">🔗 檢查原始數據 ↗</a>
+	                    </div>
                   </div>
                 </div>
               </div>
+	              <CalculationAudit :items="sixAuditRows" />
             </div>
 
             <div class="tab-pane fade" id="tab-q4">
@@ -293,6 +302,7 @@
                   </tbody>
                 </table>
               </div></div>
+	              <CalculationAudit :items="q4AuditRows" />
             </div>
 
           </div>
@@ -325,6 +335,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useHead } from '#imports'
+import CalculationAudit from './CalculationAudit.vue'
 
 // 載入 Bootstrap JS 讓 Modal 與 Tabs 生效
 useHead({
@@ -425,6 +436,50 @@ const sixAverageDisplay = computed(() => {
 const ratingBadgeClass = rating => ({ AA: 'bg-danger', A: 'bg-danger', BB: 'bg-warning text-dark', B: 'bg-secondary', C: 'bg-dark' }[rating] || 'bg-secondary')
 
 const displayPrice = computed(() => Number(livePrice.value || perData.value.Now_Price || 0))
+
+const SOURCE_HOSTS = new Set(['djinfo.cathaysec.com.tw', 'www.twse.com.tw', 'www.tpex.org.tw', 'tw.stock.yahoo.com'])
+const trustedSourceUrl = (candidate, fallback) => {
+  try {
+    const url = new URL(String(candidate || ''))
+    return url.protocol === 'https:' && SOURCE_HOSTS.has(url.hostname) ? url.href : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const sourceUrls = computed(() => {
+  const id = encodeURIComponent(String(stockData.value?.stock_id || searchQuery.value.id || ''))
+  const stored = { ...(sixData.value?.Sources || {}), ...(perData.value?.Sources || {}) }
+  return {
+    Rev: trustedSourceUrl(stored.Revenue, `https://djinfo.cathaysec.com.tw/z/zc/zch/zch_${id}.djhtm`),
+    Op: trustedSourceUrl(stored.FinancialRatios, `https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_${id}.djhtm`),
+    Net: trustedSourceUrl(stored.QuarterlyIncome, `https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_${id}.djhtm`),
+    EPS: trustedSourceUrl(stored.QuarterlyIncome, `https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_${id}.djhtm`),
+    Inv: trustedSourceUrl(stored.FinancialRatios, `https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_${id}.djhtm`),
+    CF: trustedSourceUrl(stored.QuarterlyCashFlow, `https://djinfo.cathaysec.com.tw/z/zc/zc3/zc3_${id}.djhtm`),
+    annualEps: trustedSourceUrl(stored.AnnualEPS, `https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq0.djhtm?b=Y&a=${id}`),
+    quarterlyEps: trustedSourceUrl(stored.QuarterlyEPS, `https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq.djhtm?b=Y&a=${id}`),
+    capital: trustedSourceUrl(stored.Capital, `https://djinfo.cathaysec.com.tw/z/zc/zcp/zcpa_${id}.djhtm`),
+    twse: trustedSourceUrl(stored.TWSEAnnualPrice, `https://www.twse.com.tw/exchangeReport/FMNPTK?response=html&stockNo=${id}`),
+    tpex: trustedSourceUrl(stored.TPEXAnnualPrice, 'https://www.tpex.org.tw/zh-tw/mainboard/trading/info/stock-year.html'),
+    yahoo: trustedSourceUrl(stored.YahooQuote, `https://tw.stock.yahoo.com/quote/${id}`)
+  }
+})
+
+const indicatorFormula = key => ({
+  Rev: 'Avg6＝近6月YoY合計÷6；AA＝Avg6>25%且最新月未降，A＝Avg6 10%～25%且未降（或>25%僅小降），負成長依程度降為BB/C',
+  Op: 'Avg4＝近4季營益率÷4；季變動＝(本季－前季)÷|前季|；AA＝Avg4>15%且穩定，單季衰退≥20%依時點降為B/BB，負值為C',
+  Net: 'YoY＝(本季淨利－去年同季)÷|去年同季|；近3季正成長且最新加速為AA，連續衰退依程度為B/C',
+  EPS: 'TTM EPS＝最近4季EPS合計；>5為AA、3～5為A、1～3為BB、<1或最新虧損為B、TTM虧損為C',
+  Inv: '季變動＝(本季週轉率－前季)÷前季；穩定且Avg4≥1.5為AA、穩定但<1.5為A，下降20%以上依時點為B/C',
+  CF: '每季自由現金流＝營業現金流＋投資現金流；連6季正為AA，4季與6季累計皆正為A，轉正/轉負為BB/B，兩者皆負為C'
+}[key] || '-')
+
+const source = (label, url) => ({ label, url })
+const fmt = (value, digits = 2) => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number.toLocaleString('zh-TW', { maximumFractionDigits: digits }) : '-'
+}
 
 // 新資料直接使用 Python 輸出的估值年度；舊資料則依資料日期與基準月份相容推算。
 const forecastYear = computed(() => {
@@ -732,6 +787,156 @@ const q4Rows = computed(() => {
     { label: `${forecastYear.value} 預估營收`, val: forwardValuation.value.revenue || 0 },
     { label: `${forecastYear.value} 預估 EPS`, val: forwardValuation.value.eps },
     { label: "預估方法", val: per.Forecast_Method || "預估營收 × 平均淨利率 ÷ 股本 × 10" }
+  ]
+})
+
+const simulationAuditRows = computed(() => (simRes.value.details || []).map((row) => {
+  let sources = [source('月營收', sourceUrls.value.Rev)]
+  if (row.step.includes('淨利')) sources = [source('財務比率', sourceUrls.value.Op)]
+  if (row.step.includes('EPS')) sources = [source('財務比率', sourceUrls.value.Op), source('股本資料', sourceUrls.value.capital)]
+  if (row.step.includes('目標價')) sources = [source('年度行情', sourceUrls.value.twse), source('歷年 EPS', sourceUrls.value.annualEps)]
+  if (row.step.includes('報酬')) sources = [source('Yahoo 即時股價', sourceUrls.value.yahoo)]
+  return { label: row.step, formula: row.formula, substitution: row.formula, result: row.result, sources }
+}))
+
+const historyAuditRows = computed(() => {
+  const per = perData.value
+  const current = histRows.value.find(row => row.is_estimate) || {}
+  return [
+    {
+      label: `${per.Current_Year || forecastYear.value} 預估 EPS`,
+      formula: '完整年度營收 × 近四季平均淨利率 ÷ 股本 × 10',
+      substitution: `${fmt(forwardValuation.value.currentRevenue, 4)} × ${per.Net_Avg || '0%'} ÷ ${fmt(per.Capital, 4)} × 10`,
+      result: current.eps || '-',
+      sources: [source('月營收', sourceUrls.value.Rev), source('財務比率', sourceUrls.value.Op), source('股本資料', sourceUrls.value.capital)]
+    },
+    {
+      label: '當年度本益比',
+      formula: 'PE 高＝當年最高價÷當年 EPS；PE 低＝當年最低價÷當年 EPS',
+      substitution: `${current.h || '-'} ÷ ${current.eps || '-'}；${current.l || '-'} ÷ ${current.eps || '-'}`,
+      result: `高 ${current.pe_h || '-'}／低 ${current.pe_l || '-'}`,
+      sources: [source('上市年度行情', sourceUrls.value.twse), source('上櫃年度行情查詢', sourceUrls.value.tpex)]
+    },
+    {
+      label: '採用歷史 PE',
+      formula: '採用值＝min(近五年平均 PE, 最近一年 PE)',
+      substitution: `高 min(${per.PE_Avg_H || 0}, ${per.PE_H?.[0] || 0})；低 min(${per.PE_Avg_L || 0}, ${per.PE_L?.[0] || 0})`,
+      result: `高 ${per.PE_Use_H || 0}／低 ${per.PE_Use_L || 0}`,
+      sources: [source('年度行情', sourceUrls.value.twse), source('歷年 EPS', sourceUrls.value.annualEps)]
+    },
+    {
+      label: `${forecastYear.value} 目標價區間`,
+      formula: '目標價＝預估 EPS × 採用歷史 PE',
+      substitution: `${forwardValuation.value.eps} × ${per.PE_Use_L || 0}～${per.PE_Use_H || 0}`,
+      result: `${forwardValuation.value.targetL}～${forwardValuation.value.targetH}`,
+      sources: [source('歷年 EPS', sourceUrls.value.annualEps), source('年度行情', sourceUrls.value.twse)]
+    }
+  ]
+})
+
+const revenueAuditRows = computed(() => {
+  const per = perData.value
+  const yoyValues = (per.YoY_Vals || []).slice(0, 6).map(parseNumber)
+  const latest = yoyValues[0] || 0
+  const average = yoyValues.length ? yoyValues.reduce((sum, value) => sum + value, 0) / yoyValues.length : 0
+  return [
+    {
+      label: '月營收（億元）', formula: '來源營收（千元）÷100,000',
+      substitution: `各月份原始值逐筆換算；最新顯示 ${per.Rev_Vals?.[0] ?? '-'} 億`, result: per.Rev_Names?.[0] || '-',
+      sources: [source('月營收與 YoY 原表', sourceUrls.value.Rev)]
+    },
+    {
+      label: '月營收年增率', formula: '(本月營收－去年同月營收)÷去年同月營收×100%',
+      substitution: `最新月 ${fmt(latest)}%；近 6 月平均 ${fmt(average)}%`, result: `程式採用 ${per.YoY_Use || '0%'}`,
+      note: '估值採最新月與近六個月平均兩者較低值，降低單月異常跳升的影響。',
+      sources: [source('月營收與 YoY 原表', sourceUrls.value.Rev)]
+    },
+    {
+      label: `${per.Current_Year || forecastYear.value} 完整年度營收`,
+      formula: '已公布月份合計＋未公布月份去年值×(1＋採用 YoY)',
+      substitution: `基準月份 ${metaData.value.TargetMonth || stockData.value?.data_month || '-'}；採用 YoY ${per.YoY_Use || '0%'}`,
+      result: `${fmt(forwardValuation.value.currentRevenue, 4)} 億`, sources: [source('月營收原表', sourceUrls.value.Rev)]
+    },
+    {
+      label: `${forecastYear.value} 預估營收`, formula: '完整年度基期營收×(1＋採用 YoY)',
+      substitution: `${fmt(forwardValuation.value.currentRevenue, 4)} × (1＋${per.YoY_Use || '0%'})`,
+      result: `${fmt(forwardValuation.value.revenue, 4)} 億`, sources: [source('月營收原表', sourceUrls.value.Rev)]
+    }
+  ]
+})
+
+const netAuditRows = computed(() => {
+  const per = perData.value
+  const predictedNet = forwardValuation.value.revenue * parsePct(per.Net_Avg)
+  return [
+    {
+      label: '單季稅後淨利率', formula: '單季稅後淨利÷單季營收×100%',
+      substitution: (per.Net_Vals || []).slice(0, 4).join('、') || '-', result: '畫面列示各季比率',
+      sources: [source('財務比率季表', sourceUrls.value.Op)]
+    },
+    {
+      label: '近四季平均淨利率', formula: '(最近四季淨利率合計)÷4',
+      substitution: `(${(per.Net_Vals || []).slice(0, 4).join('＋') || '-'}) ÷ ${(per.Net_Vals || []).slice(0, 4).length || 0}`,
+      result: per.Net_Avg || '0%', sources: [source('財務比率季表', sourceUrls.value.Op)]
+    },
+    {
+      label: `${forecastYear.value} 預估淨利`, formula: '預估營收×近四季平均淨利率',
+      substitution: `${fmt(forwardValuation.value.revenue, 4)} × ${per.Net_Avg || '0%'}`,
+      result: `${fmt(predictedNet, 4)} 億`, sources: [source('月營收', sourceUrls.value.Rev), source('財務比率', sourceUrls.value.Op)]
+    },
+    {
+      label: `${forecastYear.value} 預估 EPS`, formula: '預估營收×平均淨利率÷股本×10',
+      substitution: `${fmt(forwardValuation.value.revenue, 4)} × ${per.Net_Avg || '0%'} ÷ ${fmt(per.Capital, 4)} × 10`,
+      result: `${forwardValuation.value.eps} 元`, sources: [source('財務比率', sourceUrls.value.Op), source('股本資料', sourceUrls.value.capital)]
+    }
+  ]
+})
+
+const sixAuditRows = computed(() => {
+  const rows = sixIndicatorEntries.value.map(item => ({
+    label: `${item.Label}（${item.Rating}）`,
+    formula: item.Formula || indicatorFormula(item.key),
+    substitution: item.Data.slice(0, 8).map(row => `${row.Name}: ${row.Val}${row.YoY && row.YoY !== '-' ? ` / YoY ${row.YoY}` : ''}`).join('；') || '資料不足',
+    result: item.Reason || '不評分',
+    sources: [source('原始季/月資料', trustedSourceUrl(item.SourceURL, sourceUrls.value[item.key]))]
+  }))
+  const ratings = sixIndicatorEntries.value.filter(item => item.Rating in RATING_SCORES)
+  rows.push({
+    label: '六大指標平均',
+    formula: 'AA=4、A=3、BB=2、B=1、C=0；平均＝可評項目分數合計÷可評項目數',
+    substitution: ratings.map(item => `${item.key} ${item.Rating}=${RATING_SCORES[item.Rating]}`).join('＋') || '無可評項目',
+    result: `${sixAverageDisplay.value} / 4（${ratings.length} 項）`,
+    sources: []
+  })
+  return rows
+})
+
+const q4AuditRows = computed(() => {
+  const per = perData.value
+  const qSum = Number(per.EPS_Q1 || 0) + Number(per.EPS_Q2 || 0) + Number(per.EPS_Q3 || 0)
+  const usesEstimate = per.Use_Estimation !== false
+  return [
+    {
+      label: '去年 Q4 營收', formula: '10 月營收＋11 月營收＋12 月營收',
+      substitution: '依去年民國年份篩選三個月份後加總', result: `${fmt(per.Q4_Rev_Actual)} 億`,
+      sources: [source('月營收原表', sourceUrls.value.Rev)]
+    },
+    {
+      label: 'Q4 預估 EPS', formula: 'Q4 營收×平均淨利率÷股本×10',
+      substitution: `${fmt(per.Q4_Rev_Actual)} × ${per.Net_Avg || '0%'} ÷ ${fmt(per.Capital, 4)} × 10`, result: per.Q4_EPS_Est || 0,
+      sources: [source('月營收', sourceUrls.value.Rev), source('財務比率', sourceUrls.value.Op), source('股本資料', sourceUrls.value.capital)]
+    },
+    {
+      label: '最近全年 EPS', formula: usesEstimate ? '前三季實際 EPS 合計＋Q4 估算 EPS' : '已公布四季實際 EPS 合計',
+      substitution: usesEstimate ? `${fmt(qSum)}＋${fmt(per.Q4_EPS_Est)}` : `來源全年實際 EPS ${per.Total_EPS_Est || 0}`,
+      result: per.Total_EPS_Est || 0,
+      note: per.Detect_Reason || '', sources: [source('季度 EPS', sourceUrls.value.quarterlyEps)]
+    },
+    {
+      label: '年報判定', formula: '若來源已出現去年 4Q，採實際全年 EPS；否則估算 Q4',
+      substitution: `最新季別：${per.Latest_Quarter_Str || '-'}`, result: usesEstimate ? '使用估算' : '使用實際值',
+      sources: [source('季度損益表', sourceUrls.value.quarterlyEps)]
+    }
   ]
 })
 </script>
