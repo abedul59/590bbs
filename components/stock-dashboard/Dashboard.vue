@@ -86,12 +86,12 @@
 
         <div class="card-body p-4">
           <div class="row g-3 mb-4 text-center">
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #0d6efd !important;"><small class="text-muted d-block mb-1">最新成交</small><span class="fs-5 fw-bold">{{ perData.Now_Price }}</span></div></div>
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">預估營收</small><span class="fs-5">{{ perData.Predict_Rev }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #0d6efd !important;"><small class="text-muted d-block mb-1">最新成交</small><span class="fs-5 fw-bold">{{ displayPrice || '-' }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">預估營收</small><span class="fs-5">{{ forwardValuation.revenue }}</span></div></div>
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card" style="border-left-color: #dc3545 !important;"><small class="text-muted d-block mb-1">{{ forecastYear }} 預估EPS</small><span class="fs-4 text-danger fw-bold">{{ forwardValuation.eps }}</span></div></div>
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(高)</small><span class="fs-5 text-success fw-bold">{{ forwardValuation.targetH }}</span></div></div>
             <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">{{ forecastYear }} 目標價(低)</small><span class="fs-5 text-secondary fw-bold">{{ forwardValuation.targetL }}</span></div></div>
-            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">潛在報酬</small><span class="fs-5 text-danger fw-bold">{{ perData.Profit }}</span></div></div>
+            <div class="col-6 col-md-2"><div class="p-2 border rounded bg-light stat-card"><small class="text-muted d-block mb-1">潛在報酬</small><span class="fs-5 text-danger fw-bold">{{ forwardValuation.profit }}</span></div></div>
           </div>
 
           <ul class="nav nav-tabs nav-fill mb-4" id="stockTabs" role="tablist">
@@ -225,7 +225,7 @@
                       <td class="text-primary">{{ forwardValuation.eps }}</td><td>-</td><td>-</td>
                     </tr>
                     <tr v-for="(row, index) in histRows" :key="index">
-                      <td>{{ row.year_str }} <span v-if="index === 0 && perData.EPS1_Is_Est">(預)</span></td>
+                      <td>{{ row.year_str }} <span v-if="row.is_estimate">(預)</span></td>
                       <td>{{ row.h }}</td><td>{{ row.l }}</td><td>{{ row.eps }}</td><td>{{ row.pe_h }}</td><td>{{ row.pe_l }}</td>
                     </tr>
                   </tbody>
@@ -258,20 +258,25 @@
             </div>
 
             <div class="tab-pane fade" id="tab-six">
-              <div class="alert alert-info text-center mb-3"><strong>🏆 總評分：</strong> <span class="fs-4 fw-bold text-danger">{{ sixData.Average }}</span> 分</div>
+              <div class="alert alert-info text-center mb-3">
+                <strong>🏆 六大指標平均：</strong>
+                <span class="fs-4 fw-bold text-danger">{{ sixAverageDisplay }}</span> / 4 分
+                <small class="text-muted ms-2">已評 {{ sixScoredCountDisplay }} / 6 項</small>
+              </div>
               <div class="row g-3">
-                <div class="col-md-4 col-sm-6" v-for="(item, key) in sixData" :key="key" v-show="key !== 'Name' && key !== 'Average'">
+                <div class="col-md-4 col-sm-6" v-for="item in sixIndicatorEntries" :key="item.key">
                   <div class="card h-100 card-shadow">
                     <div class="card-header d-flex justify-content-between small">
-                      <strong>{{ key }}</strong>
-                      <span class="badge" :class="['A', 'AA'].includes(item.Rating) ? 'bg-danger' : 'bg-secondary'">{{ item.Rating }}</span>
+                      <strong>{{ item.Label }} <small class="text-muted">({{ item.key }})</small></strong>
+                      <span class="badge" :class="ratingBadgeClass(item.Rating)">{{ item.Rating }}</span>
                     </div>
                     <div class="card-body p-0">
                       <table class="table table-sm table-striped mb-0 text-center">
                         <thead><tr><th>項目</th><th>數值</th></tr></thead>
-                        <tbody><tr v-for="(d, i) in item.Data" :key="i"><td>{{ d.Name }}</td><td>{{ d.Val }}</td></tr></tbody>
+                        <tbody><tr v-for="(d, i) in item.Data" :key="i"><td>{{ d.Name }}</td><td>{{ d.Val }} <small v-if="d.YoY && d.YoY !== '-'" class="text-muted">({{ d.YoY }})</small></td></tr></tbody>
                       </table>
                     </div>
+                    <div class="card-footer small text-muted">判定：{{ item.Reason || '資料不足' }}</div>
                   </div>
                 </div>
               </div>
@@ -352,6 +357,75 @@ const parsePct = (val) => {
   return parseFloat(String(val).replace('%', '').replace(',', '').trim()) / 100 || 0;
 }
 
+const parseNumber = (val) => {
+  const raw = String(val ?? '').replaceAll(',', '').replace('%', '').trim()
+  if (!raw || raw === '-' || raw === '--') return 0
+  const negative = raw.startsWith('(') && raw.endsWith(')')
+  const parsed = Number(raw.replace(/[()]/g, ''))
+  return Number.isFinite(parsed) ? (negative ? -parsed : parsed) : 0
+}
+
+const RATING_SCORES = { AA: 4, A: 3, BB: 2, B: 1, C: 0 }
+const SIX_KEYS = ['Rev', 'Op', 'Net', 'EPS', 'Inv', 'CF']
+const SIX_LABELS = {
+  Rev: '營收年增率', Op: '營業利益率', Net: '稅後淨利年增率',
+  EPS: '近四季 EPS', Inv: '存貨週轉率', CF: '自由現金流'
+}
+
+// 舊版 JSON 將 EPS、存貨與現金流固定寫成「不評分」。先依既有數列補評，
+// 新版 EXE 寫入 Reason 後則完全採用 Python 的正式評分。
+const legacySixRating = (key, rows) => {
+  const values = rows.map(row => parseNumber(row?.Val))
+  if (key === 'EPS' && values.length >= 4) {
+    const ttm = values.slice(0, 4).reduce((sum, value) => sum + value, 0)
+    if (ttm < 0) return ['C', '舊資料補評：近四季 EPS 累積虧損']
+    if (values[0] < 0 || ttm < 1) return ['B', '舊資料補評：最新季虧損或近四季 EPS 未滿 1 元']
+    if (ttm <= 3) return ['BB', '舊資料補評：近四季 EPS 為 1～3 元']
+    if (ttm <= 5) return ['A', '舊資料補評：近四季 EPS 為 3～5 元']
+    return ['AA', `舊資料補評：近四季 EPS ${ttm.toFixed(2)} 元，超過 5 元`]
+  }
+  if (key === 'Inv' && values.length >= 4 && values.slice(0, 4).every(value => value > 0)) {
+    const recent = values.slice(0, 4)
+    const changes = recent.slice(0, 3).map((value, index) => (value - recent[index + 1]) / recent[index + 1])
+    const average = recent.reduce((sum, value) => sum + value, 0) / 4
+    if (changes[0] <= -0.2) return ['C', '舊資料補評：最新季存貨週轉率下降逾 20%']
+    if (changes.slice(1).some(change => change <= -0.2)) return ['B', '舊資料補評：近四季曾單季下降逾 20%']
+    if (changes[0] < 0 && changes[1] < 0 && (recent[0] - recent[2]) / recent[2] <= -0.2) return ['BB', '舊資料補評：連續兩季下降且累計逾 20%']
+    if (average >= 1.5) return ['AA', `舊資料補評：近四季穩定，平均 ${average.toFixed(2)} 次`]
+    return ['A', '舊資料補評：近四季週轉率穩定']
+  }
+  if (key === 'CF' && values.length >= 6) {
+    const recent = values.slice(0, 6)
+    const sum4 = recent.slice(0, 4).reduce((sum, value) => sum + value, 0)
+    const sum6 = recent.reduce((sum, value) => sum + value, 0)
+    let rating = 'A'
+    if (sum4 < 0 && sum6 < 0) rating = 'C'
+    else if (sum4 < 0) rating = 'B'
+    else if (sum6 < 0) rating = 'BB'
+    else if (recent.every(value => value > 0)) rating = 'AA'
+    return [rating, '舊資料缺少投資現金流，暫以營運現金流評分；請用新版 EXE 更新為自由現金流']
+  }
+  return ['不評分', '資料不足，請用新版 EXE 重新更新']
+}
+
+const sixIndicatorEntries = computed(() => SIX_KEYS.map((key) => {
+  const source = sixData.value?.[key] || {}
+  const rows = Array.isArray(source.Data) ? source.Data : []
+  let rating = source.Rating || '不評分'
+  let reason = source.Reason || ''
+  if (!(rating in RATING_SCORES) && !reason) [rating, reason] = legacySixRating(key, rows)
+  return { ...source, key, Label: source.Label || SIX_LABELS[key], Rating: rating, Reason: reason, Data: rows }
+}))
+
+const sixScoredCountDisplay = computed(() => sixIndicatorEntries.value.filter(item => item.Rating in RATING_SCORES).length)
+const sixAverageDisplay = computed(() => {
+  const scores = sixIndicatorEntries.value.map(item => RATING_SCORES[item.Rating]).filter(Number.isFinite)
+  return scores.length ? Number((scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(2)) : 0
+})
+const ratingBadgeClass = rating => ({ AA: 'bg-danger', A: 'bg-danger', BB: 'bg-warning text-dark', B: 'bg-secondary', C: 'bg-dark' }[rating] || 'bg-secondary')
+
+const displayPrice = computed(() => Number(livePrice.value || perData.value.Now_Price || 0))
+
 // 新資料直接使用 Python 輸出的估值年度；舊資料則依資料日期與基準月份相容推算。
 const forecastYear = computed(() => {
   const explicitYear = Number(perData.value.Forecast_Year)
@@ -374,10 +448,20 @@ const forecastYearRoc = computed(() => {
 const forwardValuation = computed(() => {
   const per = perData.value
   let eps = Number(per.Predict_EPS || 0)
+  let revenue = Number(per.Predict_Rev || 0)
+  let currentRevenue = Number(per.Forecast_Base_Revenue || 0)
   const currentYear = Number(per.Current_Year || forecastYear.value)
   const isLegacyNextYear = !Number(per.Forecast_Year) && forecastYear.value > currentYear
   if (isLegacyNextYear) {
-    const revenue = Number(per.Predict_Rev || 0)
+    const revenues = (per.Rev_Vals || []).slice(0, 12).map(parseNumber)
+    const growthRates = (per.YoY_Vals || []).slice(0, 6).map(value => parseNumber(value) / 100)
+    if (revenues.length >= 12 && growthRates.length > 0) {
+      const growth = Math.min(growthRates[0], growthRates.reduce((sum, value) => sum + value, 0) / growthRates.length)
+      const targetMonth = Math.min(12, Math.max(1, Number(metaData.value.TargetMonth || stockData.value?.data_month || 12)))
+      currentRevenue = revenues.slice(0, targetMonth).reduce((sum, value) => sum + value, 0) +
+        revenues.slice(targetMonth, 12).reduce((sum, value) => sum + value, 0) * (1 + growth)
+      revenue = currentRevenue * (1 + growth)
+    }
     const margin = parsePct(per.Net_Avg)
     const capital = Number(per.Capital || 0)
     if (revenue > 0 && margin !== 0 && capital > 0) {
@@ -388,10 +472,16 @@ const forwardValuation = computed(() => {
   const peH = Number(per.PE_Use_H || 0)
   const peL = Number(per.PE_Use_L || 0)
   const shouldRecalculateTargets = isLegacyNextYear && eps > 0
+  const targetH = shouldRecalculateTargets ? Number((eps * peH).toFixed(2)) : Number(per.Target_H || 0)
+  const targetL = shouldRecalculateTargets ? Number((eps * peL).toFixed(2)) : Number(per.Target_L || 0)
+  const price = displayPrice.value
   return {
     eps,
-    targetH: shouldRecalculateTargets ? Number((eps * peH).toFixed(2)) : Number(per.Target_H || 0),
-    targetL: shouldRecalculateTargets ? Number((eps * peL).toFixed(2)) : Number(per.Target_L || 0)
+    revenue: Number(revenue.toFixed(4)),
+    currentRevenue: Number(currentRevenue.toFixed(4)),
+    targetH,
+    targetL,
+    profit: price > 0 ? `${(((targetH - price) / price) * 100).toFixed(2)}%` : (per.Profit || '0%')
   }
 })
 
@@ -528,11 +618,11 @@ const simRes = computed(() => {
   const origYoy = parsePct(per.YoY_Use)
   const origNet = parsePct(per.Net_Avg)
   const capital = parseFloat(per.Capital || 1)
-  const origRevPredict = parseFloat(per.Predict_Rev || 0)
+  const origRevPredict = Number(forwardValuation.value.revenue || 0)
 
   const details = []
 
-  const suppliedBaseRev = parseFloat(per.Forecast_Base_Revenue || 0)
+  const suppliedBaseRev = Number(forwardValuation.value.currentRevenue || per.Forecast_Base_Revenue || 0)
   const isNextYearForecast = per.Forecast_Horizon === 'next_year' || forecastYear.value > Number(per.Current_Year || forecastYear.value)
   const usesSuppliedBase = isNextYearForecast && suppliedBaseRev > 0
   const baseRev = usesSuppliedBase
@@ -579,10 +669,35 @@ const histRows = computed(() => {
   if (!per.H) return []
   const rows = []
   const loopLen = Math.min(per.H.length, per.L?.length||0, per.EPS?.length||0)
-  const cYear = per.Current_Year || new Date().getFullYear()
+  const cYear = Number(per.Current_Year || new Date().getFullYear())
   const cYearRoc = per.Current_Year_ROC || (cYear - 1911)
+
+  const currentHigh = Number(per.Current_Year_H || per.H0 || 0)
+  const currentLow = Number(per.Current_Year_L || per.L0 || 0)
+  let currentEps = Number(per.Current_Year_EPS_Est || 0)
+  if (currentEps <= 0 && forecastYear.value > cYear) {
+    const growth = parsePct(per.YoY_Use)
+    const forecastRevenue = Number(forwardValuation.value.revenue || 0)
+    const currentRevenue = Number(forwardValuation.value.currentRevenue || per.Forecast_Base_Revenue || 0) || (1 + growth !== 0 ? forecastRevenue / (1 + growth) : 0)
+    const margin = parsePct(per.Net_Avg)
+    const capital = Number(per.Capital || 0)
+    if (currentRevenue > 0 && margin !== 0 && capital > 0) {
+      currentEps = Number(((currentRevenue * margin / capital) * 10).toFixed(2))
+    }
+  }
+  if (currentHigh > 0 || currentLow > 0 || currentEps > 0) {
+    rows.push({
+      year_str: `${cYear}/${cYearRoc}`,
+      h: currentHigh || '-',
+      l: currentLow || '-',
+      eps: currentEps || '-',
+      pe_h: currentHigh > 0 && currentEps > 0 ? (currentHigh / currentEps).toFixed(2) : '-',
+      pe_l: currentLow > 0 && currentEps > 0 ? (currentLow / currentEps).toFixed(2) : '-',
+      is_estimate: true
+    })
+  }
   for(let i=0; i<loopLen; i++) {
-    rows.push({ year_str: `${cYear - 1 - i}/${cYearRoc - 1 - i}`, h: per.H[i], l: per.L[i], eps: per.EPS[i], pe_h: per.PE_H?.[i] || '-', pe_l: per.PE_L?.[i] || '-' })
+    rows.push({ year_str: `${cYear - 1 - i}/${cYearRoc - 1 - i}`, h: per.H[i], l: per.L[i], eps: per.EPS[i], pe_h: per.PE_H?.[i] || '-', pe_l: per.PE_L?.[i] || '-', is_estimate: false })
   }
   return rows
 })
@@ -614,7 +729,7 @@ const q4Rows = computed(() => {
     { label: "最近全年 EPS (估/實)", val: per.Total_EPS_Est || 0 },
     { label: "---", val: "---" },
     { label: "估值年度", val: `${forecastYear.value}/${forecastYearRoc.value}` },
-    { label: `${forecastYear.value} 預估營收`, val: per.Predict_Rev || 0 },
+    { label: `${forecastYear.value} 預估營收`, val: forwardValuation.value.revenue || 0 },
     { label: `${forecastYear.value} 預估 EPS`, val: forwardValuation.value.eps },
     { label: "預估方法", val: per.Forecast_Method || "預估營收 × 平均淨利率 ÷ 股本 × 10" }
   ]

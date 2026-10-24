@@ -31,6 +31,43 @@ class PerAutoTests(unittest.TestCase):
     def test_eps_uses_same_year_revenue_margin_and_capital(self):
         self.assertEqual(per_auto.calculate_eps_forecast(134.2, 0.12, 30), 5.37)
 
+    def test_2330_like_data_scores_all_six_indicators(self):
+        ratings = [
+            per_auto.rate_revenue([54.65, 53.32, 44.69, 67.87, 30.09, 17.50])[0],
+            per_auto.rate_operating_margin([60.34, 58.10, 54.00, 50.58])[0],
+            per_auto.rate_net_income([641997, 577941, 514593, 458831, 386382, 364042, 379332, 323459])[0],
+            per_auto.rate_eps([27.25, 22.08, 19.51, 17.44])[0],
+            per_auto.rate_inventory_turnover([12.76, 11.37, 10.44, 11.85, 11.69])[0],
+            per_auto.rate_free_cash_flow([725509, 625574, 497064, 426829, 620205, 391992])[0],
+        ]
+
+        self.assertEqual(ratings, ['AA'] * 6)
+        self.assertEqual(per_auto.average_rating(ratings), 4.0)
+
+    def test_financial_series_matches_labels_without_column_offset(self):
+        html = """
+        <div class="table-row"><span>項目</span><span>2026.2Q</span><span>2026.1Q</span></div>
+        <div class="table-row"><span>營業利益率</span><span>60.34%</span><span>58.10%</span></div>
+        """
+        soup = per_auto.BeautifulSoup(html, 'html.parser')
+
+        self.assertEqual(
+            per_auto.find_financial_series(soup, ('營業利益率',)),
+            [('2026.2Q', 60.34), ('2026.1Q', 58.10)],
+        )
+
+    @patch.object(per_auto.requests, "get")
+    def test_latest_price_uses_yahoo_chart(self, get):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            'chart': {'result': [{'meta': {'regularMarketPrice': 1495}}]}
+        }
+        get.return_value = response
+
+        self.assertEqual(per_auto.get_latest_price('2330'), 1495.0)
+        self.assertIn('2330.TW', get.call_args.args[0])
+
     @patch.object(per_auto.requests, "post")
     def test_uploads_to_both_dashboards(self, post):
         response = Mock()

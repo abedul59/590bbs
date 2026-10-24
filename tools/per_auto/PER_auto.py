@@ -89,11 +89,161 @@ def upload_payload(payload, retries=3):
 
 def clean_float(val):
     try:
-        val = str(val).replace(',', '').replace('%', '').strip()
-        if val == '-' or val == '' or val == 'N/A' or val == 'null': return 0.0
-        return float(val)
+        raw = str(val).replace(',', '').replace('%', '').strip()
+        if raw in ('-', '--', '', 'N/A', 'null', 'nan'): return 0.0
+        is_negative = raw.startswith('(') and raw.endswith(')')
+        raw = raw.strip('()')
+        value = float(raw)
+        return -value if is_negative else value
     except:
         return 0.0
+
+RATING_SCORES = {'AA': 4, 'A': 3, 'BB': 2, 'B': 1, 'C': 0}
+
+def split_row_values(row):
+    return [value.strip() for value in row.get_text('\n').splitlines() if value.strip()]
+
+def find_financial_series(soup, keywords, limit=8, excluded_keywords=()):
+    """以欄名配對 MoneyDJ table-row，避免依固定列號造成資料錯位。"""
+    rows = soup.find_all(class_='table-row') if soup else []
+    if not rows:
+        return []
+    headers = split_row_values(rows[0])
+    for row in rows[1:]:
+        label = row.get_text(' ', strip=True)
+        if all(keyword in label for keyword in keywords) and not any(keyword in label for keyword in excluded_keywords):
+            values = split_row_values(row)
+            count = min(limit, len(headers) - 1, len(values) - 1)
+            return [(headers[index], clean_float(values[index])) for index in range(1, count + 1)]
+    return []
+
+def rate_revenue(values):
+    recent = list(values[:6])
+    if len(recent) < 6:
+        return '不評分', '需要最近 6 個月營收年增率'
+    average = sum(recent) / 6
+    momentum = (recent[0] - recent[1]) / abs(recent[1]) if recent[1] else 0
+    if average < 0 or recent[0] < 0:
+        return 'C', '近 6 月平均或最新月營收年增率為負'
+    if any(value < 0 for value in recent):
+        return 'BB', '近 6 月曾出現負成長'
+    if recent[0] < recent[1] < recent[2]:
+        return 'B', '最近 3 個月營收年增率連續下降'
+    if average > 25 and -0.5 <= momentum < 0:
+        return 'A', '近 6 月平均逾 25%，最新月小幅放緩'
+    if 10 <= average <= 25 and recent[0] >= recent[1]:
+        return 'A', '近 6 月皆正成長、平均 10%～25% 且動能未降'
+    if average > 25 and recent[0] >= recent[1]:
+        return 'AA', '近 6 月皆正成長、平均逾 25% 且動能未降'
+    return 'BB', '維持正成長，但未達 A 級條件'
+
+def rate_operating_margin(values):
+    recent = list(values[:4])
+    if len(recent) < 4:
+        return '不評分', '需要最近 4 季營業利益率'
+    average = sum(recent) / 4
+    changes = [
+        (recent[index] - recent[index + 1]) / abs(recent[index + 1]) if recent[index + 1] else 0
+        for index in range(3)
+    ]
+    if recent[0] < 0 or average < 0:
+        return 'C', '最新季或近 4 季平均營業利益率為負'
+    if average <= 5 or changes[0] <= -0.2:
+        return 'B', '近 4 季平均不逾 5%，或最新季衰退逾 20%'
+    if changes[1] <= -0.2 or changes[2] <= -0.2:
+        return 'BB', '近 4 季曾出現單季衰退逾 20%'
+    stable = all(recent[index] > recent[index + 1] * 0.8 for index in range(3))
+    if average > 15 and stable:
+        return 'AA', '近 4 季平均逾 15% 且維持穩定'
+    if 10 <= average <= 15 and recent[0] > recent[1] and stable:
+        return 'AA', '近 4 季平均 10%～15%、穩定且最新季上升'
+    if (10 <= average <= 15 and stable) or (5 < average < 10 and recent[0] > recent[1] and stable):
+        return 'A', '營業利益率維持穩定'
+    return 'BB', '未達穩定成長條件'
+
+def calculate_yoy(values):
+    return [
+        (values[index] - values[index + 4]) / abs(values[index + 4]) if values[index + 4] else 0
+        for index in range(4)
+    ] if len(values) >= 8 else []
+
+def rate_net_income(values):
+    yoy = calculate_yoy(values)
+    if len(yoy) < 4:
+        return '不評分', '需要最近 8 季稅後淨利', yoy
+    negatives = sum(value < 0 for value in yoy)
+    if yoy[0] < 0 and yoy[1] < 0:
+        rating, reason = 'C', '最近 2 季稅後淨利年增率為負'
+    elif (yoy[0] < yoy[1] < yoy[2] and yoy[0] < 0.5) or yoy[0] < 0 or negatives >= 2:
+        rating, reason = 'B', '稅後淨利成長轉弱或近 4 季至少 2 季衰退'
+    elif yoy[0] > 0 and yoy[1] > 0 and yoy[2] > 0 and yoy[0] > yoy[1]:
+        rating, reason = 'AA', '近 3 季皆正成長且最新季加速'
+    elif yoy[0] >= 0.5 and yoy[1] >= 0.5 and yoy[2] >= 0.5:
+        rating, reason = 'AA', '近 3 季年增率皆達 50%'
+    elif yoy[0] > 0 and yoy[1] > 0 and (yoy[0] - yoy[1]) / yoy[1] > -0.5:
+        rating, reason = 'A', '近 2 季皆正成長且未大幅衰退'
+    elif yoy[1] < 0 < yoy[0]:
+        rating, reason = 'BB', '最新季由負轉正'
+    else:
+        rating, reason = 'BB', '仍為正成長但動能偏弱'
+    return rating, reason, yoy
+
+def rate_eps(values):
+    if len(values) < 4:
+        return '不評分', '需要最近 4 季 EPS', 0.0
+    trailing_eps = round(sum(values[:4]), 2)
+    if trailing_eps < 0:
+        rating, reason = 'C', '近 4 季 EPS 累積虧損'
+    elif values[0] < 0 or trailing_eps < 1:
+        rating, reason = 'B', '最新季虧損或近 4 季 EPS 未滿 1 元'
+    elif trailing_eps <= 3:
+        rating, reason = 'BB', '近 4 季 EPS 為 1～3 元'
+    elif trailing_eps <= 5:
+        rating, reason = 'A', '近 4 季 EPS 為 3～5 元'
+    else:
+        rating, reason = 'AA', '近 4 季 EPS 超過 5 元'
+    return rating, reason, trailing_eps
+
+def rate_inventory_turnover(values):
+    recent = list(values[:5])
+    if len(recent) < 4 or any(value <= 0 for value in recent[:4]):
+        return '不評分', '存貨週轉率不適用或資料不足', 0.0
+    average = sum(recent[:4]) / 4
+    changes = [(recent[index] - recent[index + 1]) / recent[index + 1] for index in range(3)]
+    if changes[0] <= -0.2:
+        rating, reason = 'C', '最新季存貨週轉率下降逾 20%'
+    elif changes[1] <= -0.2 or changes[2] <= -0.2:
+        rating, reason = 'B', '近 4 季曾出現單季下降逾 20%'
+    elif changes[0] < 0 and changes[1] < 0 and (recent[0] - recent[2]) / recent[2] <= -0.2:
+        rating, reason = 'BB', '連續 2 季下降且累計逾 20%'
+    elif average >= 1.5 and all(change > -0.2 for change in changes):
+        rating, reason = 'AA', '近 4 季穩定且平均週轉率達 1.5 次'
+    elif all(change > -0.2 for change in changes):
+        rating, reason = 'A', '近 4 季週轉率穩定'
+    else:
+        rating, reason = 'BB', '週轉率波動，未達穩定條件'
+    return rating, reason, average
+
+def rate_free_cash_flow(values):
+    recent = list(values[:6])
+    if len(recent) < 6:
+        return '不評分', '需要最近 6 季自由現金流', 0.0, 0.0
+    sum4, sum6 = sum(recent[:4]), sum(recent)
+    if sum4 < 0 and sum6 < 0:
+        rating, reason = 'C', '近 4 季與近 6 季自由現金流皆為負'
+    elif sum4 < 0 <= sum6:
+        rating, reason = 'B', '近 6 季為正，但近 4 季轉負'
+    elif sum4 >= 0 > sum6:
+        rating, reason = 'BB', '近 4 季轉正，但近 6 季仍為負'
+    elif all(value > 0 for value in recent):
+        rating, reason = 'AA', '連續 6 季自由現金流為正'
+    else:
+        rating, reason = 'A', '近 4 季與近 6 季自由現金流累積為正'
+    return rating, reason, sum4, sum6
+
+def average_rating(ratings):
+    scores = [RATING_SCORES[rating] for rating in ratings if rating in RATING_SCORES]
+    return round(sum(scores) / len(scores), 2) if scores else 0.0
 
 def determine_forecast_year(current_year, current_month, target_month):
     """9 月起改用下一年度 forward EPS，回傳應估值的西元年度。"""
@@ -150,108 +300,157 @@ def get_stock_name_robust(stock_id):
 
     return str(stock_id)
 
+def get_latest_price(stock_id):
+    """先取 Yahoo chart 即時/最近收盤價，再以舊站頁面作備援。"""
+    suffixes = ('.TW',) if stock_id in TSEAll else ('.TWO', '.TW')
+    for suffix in suffixes:
+        try:
+            response = requests.get(
+                f'https://query1.finance.yahoo.com/v8/finance/chart/{stock_id}{suffix}',
+                headers=get_headers(),
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            result = response.json().get('chart', {}).get('result') or []
+            if result:
+                meta = result[0].get('meta', {})
+                price = clean_float(meta.get('regularMarketPrice') or meta.get('previousClose'))
+                if price > 0:
+                    return price
+        except (requests.RequestException, ValueError, TypeError, AttributeError):
+            pass
+
+    try:
+        response = requests.post(
+            f'https://stock.wearn.com/a{stock_id}.html',
+            headers=get_headers(),
+            timeout=REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        for item in soup.find_all('ul'):
+            if '成交價' in item.get_text(' ', strip=True):
+                values = item.find_all('li')
+                if values:
+                    price = clean_float(values[0].get_text(strip=True))
+                    if price > 0:
+                        return price
+    except requests.RequestException:
+        pass
+    return 0.0
+
 # ==============================================================================
 # 分析模組：六大指標 (前置，供PERsegx使用，以便抓取最新4Q資訊)
 # ==============================================================================
 def Stock6x_Analysis(stock_id):
-    data = {}
-    stock_name = get_stock_name_robust(stock_id); data['Name'] = stock_name
+    data = {'Name': get_stock_name_robust(stock_id)}
 
-    rev_result = {'Rating': '不評分', 'Data': [], 'Extra': {}}
+    rev_result = {'Label': '營收年增率', 'Rating': '不評分', 'Data': [], 'Extra': {}}
+    revenue_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zch/zch_{stock_id}.djhtm', 'cp950')
     try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zch/zch_{stock_id}.djhtm', 'cp950')
-        if soup:
-            dfs = pd.read_html(io.StringIO(str(soup))); df_rev = dfs[2]; vals = []
-            for i in range(12):
-                try:
-                    v = clean_float(df_rev.iloc[6+i, 4])/100
-                    vals.append(v); rev_result['Data'].append({'Name': str(df_rev.iloc[6+i, 0]), 'Val': f"{clean_float(df_rev.iloc[6+i, 4]):.2f}%"})
-                except: pass
-            if vals:
-                c = vals[:7]; avg6 = sum(c[:6])/6;
-                rev_result['Extra']['Avg6'] = f"{avg6*100:.2f}%"; rev_result['Extra']['AccYoY'] = f"{clean_float(df_rev.iloc[6, 6]):.2f}%"
-                rev_result['Rating'] = "AA" if avg6>0.25 else "A" if avg6>0.1 else "BB"
-    except: pass
+        if revenue_soup:
+            dataframes = pd.read_html(io.StringIO(str(revenue_soup)))
+            revenue_table = dataframes[2]
+            revenue_growth = []
+            for index in range(12):
+                value = clean_float(revenue_table.iloc[6 + index, 4])
+                revenue_growth.append(value)
+                rev_result['Data'].append({
+                    'Name': str(revenue_table.iloc[6 + index, 0]),
+                    'Val': f"{value:.2f}%",
+                })
+            rating, reason = rate_revenue(revenue_growth)
+            rev_result['Rating'] = rating
+            rev_result['Reason'] = reason
+            rev_result['Extra']['Avg6'] = f"{sum(revenue_growth[:6]) / 6:.2f}%"
+            rev_result['Extra']['AccYoY'] = f"{clean_float(revenue_table.iloc[6, 6]):.2f}%"
+    except (IndexError, ValueError, TypeError) as exc:
+        rev_result['Reason'] = f"營收資料解析失敗：{exc}"
     data['Rev'] = rev_result
 
-    op_result = {'Rating': '不評分', 'Data': [], 'Extra': {}}
-    try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm', 'cp950')
-        if soup:
-            rows = soup.find_all(class_='table-row'); hr = rows[0].text.split('\n'); vals=[]
-            for row in rows:
-                if "營業利益率" in row.text:
-                    cols = row.text.split('\n')
-                    for i in range(2, min(10, len(cols))):
-                        v = clean_float(cols[i]); vals.append(v)
-                        op_result['Data'].append({'Name': hr[i], 'Val': f"{v}%"})
-                    break
-            if len(vals)>=4:
-                avg4=sum(vals[:4])/4; op_result['Extra']['Avg4'] = f"{avg4:.2f}%"
-                op_result['Rating'] = "AA" if avg4>15 else "A" if avg4>10 else "BB"
-    except: pass
-    data['Op'] = op_result
+    ratio_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm', 'cp950')
+    operating_series = find_financial_series(ratio_soup, ('營業利益率',))
+    operating_values = [value for _, value in operating_series]
+    op_rating, op_reason = rate_operating_margin(operating_values)
+    data['Op'] = {
+        'Label': '營業利益率',
+        'Rating': op_rating,
+        'Reason': op_reason,
+        'Data': [{'Name': name, 'Val': f"{value:.2f}%"} for name, value in operating_series],
+        'Extra': {'Avg4': f"{sum(operating_values[:4]) / 4:.2f}%"} if len(operating_values) >= 4 else {},
+    }
 
-    net_result = {'Rating': '不評分', 'Data': [], 'Extra': {}}
-    try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_{stock_id}.djhtm', 'cp950')
-        if soup:
-            rows = soup.find_all(class_='table-row'); hr = rows[0].text.split('\n'); vals=[]
-            for row in rows:
-                if "稅後淨利" in row.text and "歸屬" not in row.text:
-                    cols = row.text.split('\n')
-                    for i in range(2, min(10, len(cols))):
-                        try: vals.append(clean_float(cols[i]))
-                        except: vals.append(0)
-                    break
-            if len(vals)>=8:
-                yoy = [(vals[i]-vals[i+4])/abs(vals[i+4]) if vals[i+4]!=0 else 0 for i in range(4)]
-                for i in range(len(vals)):
-                    y_str = f"{yoy[i]*100:.2f}%" if i<4 else "-"
-                    net_result['Data'].append({'Name': hr[2+i], 'Val': f"{vals[i]:,.0f}", 'YoY': y_str})
-                net_result['Rating'] = "AA" if yoy[0]>0.5 else "A" if yoy[0]>0 else "BB"
-    except: pass
-    data['Net'] = net_result
+    income_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_{stock_id}.djhtm', 'cp950')
+    net_series = find_financial_series(income_soup, ('稅後淨利',), excluded_keywords=('歸屬',))
+    if not net_series:
+        net_series = find_financial_series(income_soup, ('稅後淨利',))
+    net_values = [value for _, value in net_series]
+    net_rating, net_reason, net_yoy = rate_net_income(net_values)
+    data['Net'] = {
+        'Label': '稅後淨利年增率',
+        'Rating': net_rating,
+        'Reason': net_reason,
+        'Data': [
+            {
+                'Name': name,
+                'Val': f"{value:,.0f}",
+                'YoY': f"{net_yoy[index] * 100:.2f}%" if index < len(net_yoy) else '-',
+            }
+            for index, (name, value) in enumerate(net_series)
+        ],
+        'Extra': {'LatestYoY': f"{net_yoy[0] * 100:.2f}%"} if net_yoy else {},
+    }
 
-    eps_result = {'Rating': '不評分', 'Data': []}
-    try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcq/zcq_{stock_id}.djhtm', 'cp950')
-        if soup:
-            rows = soup.find_all(class_='table-row'); hr = rows[0].text.split('\n')
-            for row in rows:
-                if "EPS" in row.text or "每股盈餘" in row.text:
-                    cols = row.text.split('\n')
-                    for i in range(2, min(10, len(cols))): eps_result['Data'].append({'Name': hr[i], 'Val': str(clean_float(cols[i]))})
-                    break
-    except: pass
-    data['EPS'] = eps_result
+    eps_series = find_financial_series(income_soup, ('每股盈餘',))
+    if not eps_series:
+        eps_series = find_financial_series(income_soup, ('EPS',))
+    eps_values = [value for _, value in eps_series]
+    eps_rating, eps_reason, trailing_eps = rate_eps(eps_values)
+    data['EPS'] = {
+        'Label': '近四季 EPS',
+        'Rating': eps_rating,
+        'Reason': eps_reason,
+        'Data': [{'Name': name, 'Val': str(value)} for name, value in eps_series],
+        'Extra': {'Trailing4Q': trailing_eps},
+    }
 
-    inv_result = {'Rating': '不評分', 'Data': []}
-    try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm', 'cp950')
-        if soup:
-            rows = soup.find_all(class_='table-row'); hr = rows[0].text.split('\n')
-            for row in rows:
-                if "存貨" in row.text:
-                    cols = row.text.split('\n')
-                    for i in range(2, min(10, len(cols))): inv_result['Data'].append({'Name': hr[i], 'Val': str(clean_float(cols[i]))})
-                    break
-    except: pass
-    data['Inv'] = inv_result
+    inventory_series = find_financial_series(ratio_soup, ('存貨', '週轉'))
+    if not inventory_series:
+        inventory_series = find_financial_series(ratio_soup, ('存貨',))
+    inventory_values = [value for _, value in inventory_series]
+    inventory_rating, inventory_reason, inventory_average = rate_inventory_turnover(inventory_values)
+    data['Inv'] = {
+        'Label': '存貨週轉率',
+        'Rating': inventory_rating,
+        'Reason': inventory_reason,
+        'Data': [{'Name': name, 'Val': str(value)} for name, value in inventory_series],
+        'Extra': {'Avg4': round(inventory_average, 2)},
+    }
 
-    cf_result = {'Rating': '不評分', 'Data': [], 'Extra': {}}
-    try:
-        soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zc3/zc3_{stock_id}.djhtm', 'cp950')
-        if soup:
-             rows = soup.find_all(class_='table-row'); hr = rows[0].text.split('\n')
-             for row in rows:
-                 if "營運" in row.text and "現金" in row.text:
-                     cols = row.text.split('\n')
-                     for i in range(2, min(10, len(cols))): cf_result['Data'].append({'Name': hr[2+i], 'Val': str(clean_float(cols[2+i]))})
-                     break
-    except: pass
-    data['CF'] = cf_result
-    data['Average'] = "0"
+    cash_soup = fetch_soup(f'https://djinfo.cathaysec.com.tw/z/zc/zc3/zc3_{stock_id}.djhtm', 'cp950')
+    operating_cash = find_financial_series(cash_soup, ('營業活動', '現金'))
+    if not operating_cash:
+        operating_cash = find_financial_series(cash_soup, ('營運', '現金'))
+    investing_cash = find_financial_series(cash_soup, ('投資活動', '現金'))
+    cash_count = min(len(operating_cash), len(investing_cash))
+    free_cash_series = [
+        (operating_cash[index][0], operating_cash[index][1] + investing_cash[index][1])
+        for index in range(cash_count)
+    ]
+    free_cash_values = [value for _, value in free_cash_series]
+    cash_rating, cash_reason, cash_sum4, cash_sum6 = rate_free_cash_flow(free_cash_values)
+    data['CF'] = {
+        'Label': '自由現金流',
+        'Rating': cash_rating,
+        'Reason': cash_reason,
+        'Data': [{'Name': name, 'Val': f"{value:,.0f}"} for name, value in free_cash_series],
+        'Extra': {'Sum4': round(cash_sum4, 2), 'Sum6': round(cash_sum6, 2)},
+    }
+
+    ratings = [data[key]['Rating'] for key in ('Rev', 'Op', 'Net', 'EPS', 'Inv', 'CF')]
+    data['Average'] = str(average_rating(ratings))
+    data['ScoredCount'] = sum(rating in RATING_SCORES for rating in ratings)
+    data['Scale'] = '0～4'
     return data
 
 # ==============================================================================
@@ -272,7 +471,7 @@ def PERsegx(stock_id, month_id, six_data):
     deadline_date = datetime.datetime(current_year_ad, 3, 31)
     is_before_deadline = now < deadline_date
 
-    H0=H1=H2=H3=H4=H5=H6=0.0; L1=L2=L3=L4=L5=L6=0.0
+    H0=H1=H2=H3=H4=H5=H6=0.0; L0=L1=L2=L3=L4=L5=L6=0.0
     eps1=eps2=eps3=eps4=eps5=0.0; eps1N = "Unknown"
     xEPSList = []
     xYearSeasonTitleList = []
@@ -315,7 +514,9 @@ def PERsegx(stock_id, month_id, six_data):
                     start_idx = -2 if last_row_year == current_year_roc else -1
 
                     if last_row_year == current_year_roc:
-                        try: H0 = float(df.iloc[-1].iloc[4])
+                        try:
+                            H0 = clean_float(df.iloc[-1].iloc[4])
+                            L0 = clean_float(df.iloc[-1].iloc[6])
                         except: pass
                     try:
                         if len(df) >= abs(start_idx):   r1 = df.iloc[start_idx];   H1=float(r1.iloc[4]); L1=float(r1.iloc[6])
@@ -347,7 +548,9 @@ def PERsegx(stock_id, month_id, six_data):
                     start_idx = 1 if first_year == current_year_roc else 0
 
                     if first_year == current_year_roc:
-                        try: H0 = float(df.iloc[0].iloc[5])
+                        try:
+                            H0 = clean_float(df.iloc[0].iloc[5])
+                            L0 = clean_float(df.iloc[0].iloc[7])
                         except: pass
                     try:
                         if len(df) > start_idx:   r1 = df.iloc[start_idx];   H1 = float(r1.iloc[5]); L1 = float(r1.iloc[7])
@@ -458,9 +661,8 @@ def PERsegx(stock_id, month_id, six_data):
             dfs = pd.read_html(io.StringIO(str(soup)))
             if len(dfs) > 2:
                 df_rev = dfs[2]
-                try: RevYoY = float(df_rev.iloc[6, 4].replace('%',''))/100
-                except: RevYoY = 0
-                RevYoY_Use = f"{RevYoY*100:.2f}%"
+                try: latest_yoy = clean_float(df_rev.iloc[6, 4]) / 100
+                except: latest_yoy = 0
 
                 yoy_sum = 0; count = 0
                 for k in range(6):
@@ -468,7 +670,10 @@ def PERsegx(stock_id, month_id, six_data):
                         v = float(df_rev.iloc[6+k, 4].replace('%',''))/100
                         yoy_sum += v; count += 1
                      except: pass
-                if count > 0: RevYoY_Avg = f"{(yoy_sum/count)*100:.2f}%"
+                average_yoy = yoy_sum / count if count else latest_yoy
+                RevYoY = min(latest_yoy, average_yoy)
+                RevYoY_Use = f"{RevYoY*100:.2f}%"
+                RevYoY_Avg = f"{average_yoy*100:.2f}%"
 
                 vals = []
                 for i in range(12):
@@ -495,22 +700,21 @@ def PERsegx(stock_id, month_id, six_data):
                 )
     except: pass
 
-    Net_Predict = 0; Net4Average = 0.1; Net_names = []; Net_vals = []
+    Net_Predict = 0; Net4Average = 0; Net_names = []; Net_vals = []
     try:
         url = f'https://djinfo.cathaysec.com.tw/z/zc/zcr/zcr_{stock_id}.djhtm'
         soup = fetch_soup(url, 'cp950')
         if soup:
-            rows = soup.find_all(class_='table-row')
-            if len(rows) > 11:
-                titles = rows[0].text.split('\n'); nets = rows[11].text.split('\n'); ns = []
-                for i in range(4):
-                    try: v = float(nets[2+i]); ns.append(v); Net_names.append(titles[2+i]); Net_vals.append(f"{v}%")
-                    except: pass
-                if ns: Net4Average = sum(ns)/len(ns)/100
+            net_margin_series = find_financial_series(soup, ('稅後淨利率',), limit=4)
+            for name, value in net_margin_series:
+                Net_names.append(name)
+                Net_vals.append(f"{value:.2f}%")
+            if net_margin_series:
+                Net4Average = sum(value for _, value in net_margin_series) / len(net_margin_series) / 100
         Net_Predict = round(Rev_Predict * Net4Average, 6)
     except: pass
 
-    capital_stock = 1.0
+    capital_stock = 0.0
     try:
         url = f'https://djinfo.cathaysec.com.tw/z/zc/zcp/zcpa_{stock_id}.djhtm'
         soup = fetch_soup(url, 'cp950')
@@ -522,18 +726,24 @@ def PERsegx(stock_id, month_id, six_data):
     # 7. 估算完整年度 EPS，再用同一年度 EPS 計算本益比目標價
     Q4_Net_Predict = 0; Q4_EPS_Predict = 0; Total_EPS_Predict = 0
     if use_estimation:
-        # 當 4Q 財報尚未出爐時，估算 2025 全年 EPS
+        # 當最近年度 Q4 財報尚未出爐時，估算該年度全年 EPS。
         if Q4_Rev_Actual > 0: Q4_Net_Predict = Q4_Rev_Actual * Net4Average
         else: Q4_Net_Predict = (Rev_Predict * Net4Average) / 4
 
         if capital_stock > 0: Q4_EPS_Predict = round(Q4_Net_Predict / capital_stock * 10, 2)
         Total_EPS_Predict = round(epsq1 + epsq2 + epsq3 + Q4_EPS_Predict, 2)
-        current_year_eps_estimate = Total_EPS_Predict
+        fallback_current_year_eps = Total_EPS_Predict
     else:
         # 最近年度 EPS 已公布，留作歷史本益比的實際基準。
         Q4_EPS_Predict = 0
         Total_EPS_Predict = eps1
-        current_year_eps_estimate = round(eps1 * (1 + RevYoY), 2)
+        fallback_current_year_eps = round(eps1 * (1 + RevYoY), 2)
+
+    current_year_eps_estimate = calculate_eps_forecast(Rev_Current_Year_Est, Net4Average, capital_stock)
+    if current_year_eps_estimate <= 0:
+        current_year_eps_estimate = fallback_current_year_eps
+    current_year_pe_high = round(H0 / current_year_eps_estimate, 2) if H0 > 0 and current_year_eps_estimate > 0 else 0
+    current_year_pe_low = round(L0 / current_year_eps_estimate, 2) if L0 > 0 and current_year_eps_estimate > 0 else 0
 
     # Predict_Rev、Predict_Net、Predict_EPS 必須屬於相同的 forecast_year。
     # 例如 2026 年 9 月後：先補齊 2026 營收，再外推 2027 營收與 EPS。
@@ -546,21 +756,7 @@ def PERsegx(stock_id, month_id, six_data):
     Predict_high_price = round(Predict_EPS * PER_H, 2) if PER_H > 0 else 0
     Predict_low_price = round(Predict_EPS * PER_L, 2) if PER_L > 0 else 0
 
-    yahoo_latest_tradePrice = 0
-    try:
-        url = f'https://stock.wearn.com/a{stock_id}.html'
-        r = requests.post(url, headers=get_headers(), timeout=REQUEST_TIMEOUT)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.content, 'html.parser')
-        uls = soup.find_all('ul')
-        for ul in uls:
-            if "成交價" in str(ul):
-                li = ul.find_all('li')[0]
-                yahoo_latest_tradePrice = float(li.text)
-                break
-        if yahoo_latest_tradePrice == 0 and len(uls) > 6:
-             yahoo_latest_tradePrice = float(uls[4].find_all('li')[0].text)
-    except: pass
+    yahoo_latest_tradePrice = get_latest_price(stock_id)
 
     New_up_profit = "0%"; New_down_loss = "0%"; risk_reward = 0
     if yahoo_latest_tradePrice > 0:
@@ -582,7 +778,9 @@ def PERsegx(stock_id, month_id, six_data):
         'Forecast_Method': '預估營收 × 平均淨利率 ÷ 股本 × 10',
         'Target_H': Predict_high_price, 'Target_L': Predict_low_price,
         'Target_H_30': round(Predict_high_price*0.7, 2), 'Target_L_30': round(Predict_low_price*0.7, 2),
-        'Now_Price': yahoo_latest_tradePrice, 'H0': H0, 'Profit': New_up_profit, 'Risk': New_down_loss, 'RR': risk_reward,
+        'Now_Price': yahoo_latest_tradePrice, 'H0': H0, 'L0': L0, 'Profit': New_up_profit, 'Risk': New_down_loss, 'RR': risk_reward,
+        'Current_Year_H': H0, 'Current_Year_L': L0, 'Current_Year_EPS_Est': current_year_eps_estimate,
+        'Current_Year_PE_H': current_year_pe_high, 'Current_Year_PE_L': current_year_pe_low,
         'Profit_30': f"{(round(Predict_high_price*0.7, 2)-yahoo_latest_tradePrice)/yahoo_latest_tradePrice*100:.2f}%" if yahoo_latest_tradePrice else "0%",
         'Risk_30': f"{(round(Predict_low_price*0.7, 2)-yahoo_latest_tradePrice)/yahoo_latest_tradePrice*100:.2f}%" if yahoo_latest_tradePrice else "0%",
         'RR_30': 0, 'Current_Year': current_year_ad, 'Current_Year_ROC': current_year_roc,
