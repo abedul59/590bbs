@@ -14,6 +14,23 @@ class PerAutoTests(unittest.TestCase):
     def test_safe_filename_removes_windows_invalid_characters(self):
         self.assertEqual(per_auto.safe_filename('2330_台積/電:*?"<>|.json'), "2330_台積_電_______.json")
 
+    def test_q3_and_q4_use_next_year_forward_valuation(self):
+        self.assertEqual(per_auto.determine_forecast_year(2026, 10, 9), 2027)
+        self.assertEqual(per_auto.determine_forecast_year(2026, 8, 8), 2026)
+
+    def test_next_year_revenue_is_based_on_completed_current_year(self):
+        base, forecast = per_auto.calculate_revenue_forecast(
+            [10] * 12,
+            0.10,
+            10,
+            forecast_next_year=True,
+        )
+        self.assertEqual(base, 122.0)
+        self.assertEqual(forecast, 134.2)
+
+    def test_eps_uses_same_year_revenue_margin_and_capital(self):
+        self.assertEqual(per_auto.calculate_eps_forecast(134.2, 0.12, 30), 5.37)
+
     @patch.object(per_auto.requests, "post")
     def test_uploads_to_both_dashboards(self, post):
         response = Mock()

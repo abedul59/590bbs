@@ -95,6 +95,31 @@ def clean_float(val):
     except:
         return 0.0
 
+def determine_forecast_year(current_year, current_month, target_month):
+    """9 月起改用下一年度 forward EPS，回傳應估值的西元年度。"""
+    try:
+        effective_month = max(int(current_month), int(target_month))
+    except (TypeError, ValueError):
+        effective_month = int(current_month)
+    return int(current_year) + (1 if effective_month >= 9 else 0)
+
+def calculate_revenue_forecast(monthly_revenues, growth_rate, target_month, forecast_next_year):
+    """先補齊本年度營收；若估值年度已切換，再外推下一年度營收。"""
+    values = [clean_float(value) for value in list(monthly_revenues)[:12]]
+    values.extend([0.0] * (12 - len(values)))
+    month = min(12, max(1, int(target_month)))
+    growth_factor = 1 + float(growth_rate)
+    current_year_estimate = sum(values[:month]) + sum(values[month:12]) * growth_factor
+    forecast_revenue = current_year_estimate * growth_factor if forecast_next_year else current_year_estimate
+    return round(current_year_estimate, 4), round(forecast_revenue, 4)
+
+def calculate_eps_forecast(revenue, net_margin, capital_stock):
+    """EPS = 稅後淨利 ÷ 股數；億元口徑下需乘以 10。"""
+    capital = clean_float(capital_stock)
+    if capital <= 0:
+        return 0.0
+    return round(clean_float(revenue) * float(net_margin) / capital * 10, 2)
+
 def get_stock_name_robust(stock_id):
     """強化版：多重備援機制抓取股票名稱"""
     stock_str = str(stock_id)
@@ -230,7 +255,7 @@ def Stock6x_Analysis(stock_id):
     return data
 
 # ==============================================================================
-# PERsegx (核心修復版：動態季別名稱 & 2026年EPS預估)
+# PERsegx (動態季別名稱與跨年度 forward EPS 估值)
 # ==============================================================================
 def PERsegx(stock_id, month_id, six_data):
     headers = get_headers()
@@ -240,6 +265,9 @@ def PERsegx(stock_id, month_id, six_data):
     current_year_roc = current_year_ad - 1911
     last_year_ad = current_year_ad - 1
     last_year_roc = current_year_roc - 1
+    forecast_year_ad = determine_forecast_year(current_year_ad, now.month, month_id)
+    forecast_year_roc = forecast_year_ad - 1911
+    forecast_next_year = forecast_year_ad > current_year_ad
 
     deadline_date = datetime.datetime(current_year_ad, 3, 31)
     is_before_deadline = now < deadline_date
@@ -419,7 +447,7 @@ def PERsegx(stock_id, month_id, six_data):
     PER_L = min(PER_L_average, PER_L1) if PER_L1>0 else PER_L_average
 
     # 6. 營收與預估
-    Rev_Predict = 0; RevYoY = 0; Q4_Rev_Actual = 0
+    Rev_Predict = 0; Rev_Current_Year_Est = 0; RevYoY = 0; Q4_Rev_Actual = 0
     Rev_names = []; Rev_vals = []
     rYoY_names = []; rYoY_vals = []; RevYoY_Use = "0%"; RevYoY_Avg = "0%"
 
@@ -459,19 +487,12 @@ def PERsegx(stock_id, month_id, six_data):
                         except: pass
                 Q4_Rev_Actual = round(temp_q4_sum, 2)
 
-                m = int(month_id)
-                if m == 1: Rev_Predict = round(vals[0] + sum(vals[1:12]) * (1+RevYoY), 4)
-                elif m == 2: Rev_Predict = round(sum(vals[:2]) + sum(vals[2:12]) * (1+RevYoY), 4)
-                elif m == 3: Rev_Predict = round(sum(vals[:3]) + sum(vals[3:12]) * (1+RevYoY), 4)
-                elif m == 4: Rev_Predict = round(sum(vals[:4]) + sum(vals[4:12]) * (1+RevYoY), 4)
-                elif m == 5: Rev_Predict = round(sum(vals[:5]) + sum(vals[5:12]) * (1+RevYoY), 4)
-                elif m == 6: Rev_Predict = round(sum(vals[:6]) + sum(vals[6:12]) * (1+RevYoY), 4)
-                elif m == 7: Rev_Predict = round(sum(vals[:7]) + sum(vals[7:12]) * (1+RevYoY), 4)
-                elif m == 8: Rev_Predict = round(sum(vals[:8]) + sum(vals[8:12]) * (1+RevYoY), 4)
-                elif m == 9: Rev_Predict = round((sum(vals[:9]) + sum(vals[9:12]) * (1+RevYoY)) * (1+RevYoY), 4)
-                elif m == 10: Rev_Predict = round((sum(vals[:10]) + sum(vals[10:12]) * (1+RevYoY)) * (1+RevYoY), 4)
-                elif m == 11: Rev_Predict = round((sum(vals[:11]) + vals[11] * (1+RevYoY)) * (1+RevYoY), 4)
-                elif m == 12: Rev_Predict = round(sum(vals[:12]) * (1+RevYoY), 4)
+                Rev_Current_Year_Est, Rev_Predict = calculate_revenue_forecast(
+                    vals,
+                    RevYoY,
+                    month_id,
+                    forecast_next_year,
+                )
     except: pass
 
     Net_Predict = 0; Net4Average = 0.1; Net_names = []; Net_vals = []
@@ -498,7 +519,7 @@ def PERsegx(stock_id, month_id, six_data):
             if len(rows) > 14: capital_stock = clean_float(rows[-14].text.split('\n')[2]) / 100
     except: pass
 
-    # 7. 【關鍵修復】2026 預估 EPS 邏輯修改
+    # 7. 估算完整年度 EPS，再用同一年度 EPS 計算本益比目標價
     Q4_Net_Predict = 0; Q4_EPS_Predict = 0; Total_EPS_Predict = 0
     if use_estimation:
         # 當 4Q 財報尚未出爐時，估算 2025 全年 EPS
@@ -507,12 +528,20 @@ def PERsegx(stock_id, month_id, six_data):
 
         if capital_stock > 0: Q4_EPS_Predict = round(Q4_Net_Predict / capital_stock * 10, 2)
         Total_EPS_Predict = round(epsq1 + epsq2 + epsq3 + Q4_EPS_Predict, 2)
-        Predict_EPS = Total_EPS_Predict
+        current_year_eps_estimate = Total_EPS_Predict
     else:
-        # 當 4Q 財報已經出爐 (代表 eps1 就是 2025 全年 EPS)，這時 Predict_EPS 應該是預估 2026 的 EPS！
+        # 最近年度 EPS 已公布，留作歷史本益比的實際基準。
         Q4_EPS_Predict = 0
         Total_EPS_Predict = eps1
-        Predict_EPS = round(eps1 * (1 + RevYoY), 2)  # 這才是準確的今年預估 EPS (去年EPS * 營收YoY)
+        current_year_eps_estimate = round(eps1 * (1 + RevYoY), 2)
+
+    # Predict_Rev、Predict_Net、Predict_EPS 必須屬於相同的 forecast_year。
+    # 例如 2026 年 9 月後：先補齊 2026 營收，再外推 2027 營收與 EPS。
+    Predict_EPS = calculate_eps_forecast(Rev_Predict, Net4Average, capital_stock)
+    if Predict_EPS <= 0:
+        Predict_EPS = current_year_eps_estimate
+        if forecast_next_year:
+            Predict_EPS = round(Predict_EPS * (1 + RevYoY), 2)
 
     Predict_high_price = round(Predict_EPS * PER_H, 2) if PER_H > 0 else 0
     Predict_low_price = round(Predict_EPS * PER_L, 2) if PER_L > 0 else 0
@@ -547,6 +576,10 @@ def PERsegx(stock_id, month_id, six_data):
         'Rev_Names': Rev_names, 'Rev_Vals': Rev_vals, 'YoY_Names': rYoY_names, 'YoY_Vals': rYoY_vals,
         'YoY_Avg': RevYoY_Avg, 'YoY_Use': RevYoY_Use, 'Net_Names': Net_names, 'Net_Vals': Net_vals, 'Net_Avg': f"{Net4Average*100:.2f}%",
         'Predict_Rev': Rev_Predict, 'Predict_Net': Net_Predict, 'Predict_EPS': Predict_EPS, 'Capital': capital_stock,
+        'Forecast_Year': forecast_year_ad, 'Forecast_Year_ROC': forecast_year_roc,
+        'Forecast_Base_Year': current_year_ad, 'Forecast_Base_Revenue': Rev_Current_Year_Est,
+        'Forecast_Horizon': 'next_year' if forecast_next_year else 'current_year',
+        'Forecast_Method': '預估營收 × 平均淨利率 ÷ 股本 × 10',
         'Target_H': Predict_high_price, 'Target_L': Predict_low_price,
         'Target_H_30': round(Predict_high_price*0.7, 2), 'Target_L_30': round(Predict_low_price*0.7, 2),
         'Now_Price': yahoo_latest_tradePrice, 'H0': H0, 'Profit': New_up_profit, 'Risk': New_down_loss, 'RR': risk_reward,
@@ -595,7 +628,11 @@ def process_stock(stock_id, target_month):
     q1n, q2n, q3n = per.get('epsq1N', '最新季'), per.get('epsq2N', '前一季'), per.get('epsq3N', '前二季')
     print(f"  - 抓取季報: {q1n}={per['EPS_Q1']}, {q2n}={per['EPS_Q2']}, {q3n}={per['EPS_Q3']}")
     if not per['Use_Estimation']:
-        print(f"  - 年報已出! 去年EPS={per['Total_EPS_Est']}, 預估今年EPS(去年EPS*YoY)={per['Predict_EPS']}")
+        print(f"  - 年報已出！最近年度 EPS={per['Total_EPS_Est']}")
+    print(
+        f"  - {per['Forecast_Year']} 年預估：營收={per['Predict_Rev']} 億，"
+        f"EPS={per['Predict_EPS']}，目標價={per['Target_L']}～{per['Target_H']}"
+    )
 
     upload_payload(payload)
 
