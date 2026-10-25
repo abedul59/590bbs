@@ -1,0 +1,6 @@
+{
+  "headless": true,
+  "minimum_wait_seconds": 40,
+  "maximum_wait_seconds": 120,
+  "open_dashboard_when_finished": false
+}

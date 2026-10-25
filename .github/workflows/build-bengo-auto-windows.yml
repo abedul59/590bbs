@@ -1,0 +1,67 @@
+name: Build Bengo Auto for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/fred-mark17-windows-build
+    tags:
+      - bengo-auto-v*
+    paths:
+      - tools/bengo-auto/**
+      - .github/workflows/build-bengo-auto-windows.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/bengo-auto/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r tools/bengo-auto/requirements.txt pyinstaller==6.18.0
+      - name: Run tests
+        run: python -m unittest tools/bengo-auto/test_bengo_auto.py
+      - name: Build Windows executable
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --console
+          --name BengoAuto
+          --collect-all selenium
+          --collect-all bs4
+          tools/bengo-auto/bengo_auto.py
+      - name: Assemble download folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item dist/BengoAuto.exe package/
+          Copy-Item tools/bengo-auto/bengo_settings.example.json package/
+          Copy-Item tools/bengo-auto/stock_id_settings.example.csv package/
+          Copy-Item tools/bengo-auto/README.md package/README.md
+          Compress-Archive -Path package/* -DestinationPath BengoAuto_Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BengoAuto_Windows
+          path: package/*
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/bengo-auto-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            package/BengoAuto.exe `
+            package/bengo_settings.example.json `
+            package/stock_id_settings.example.csv `
+            BengoAuto_Windows.zip `
+            --title "Bengo Auto Windows $env:GITHUB_REF_NAME" `
+            --notes "Bengo 大戶籌碼自動抓取、JSON 備份及 590bbs 同步工具。"
