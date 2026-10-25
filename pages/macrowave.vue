@@ -8,6 +8,8 @@
         <button :class="{ active: selectedView === 'stock-dashboard' }" @click="selectView('stock-dashboard')">📈 六大指標與本益比</button>
         <button :class="{ active: selectedView === 'twstocktracker' }" @click="selectView('twstocktracker')">📊 台股資金流向</button>
         <button :class="{ active: selectedView === 'moneydam' }" @click="selectView('moneydam')">💧 六大水庫資金流向</button>
+        <button :class="{ active: selectedView === 'bengo' }" @click="selectView('bengo')">🐋 Bengo 大戶籌碼</button>
+        <button :class="{ active: selectedView === 'media-tools' }" @click="selectView('media-tools')">🎵 影音轉檔與切割</button>
         <button v-if="selectedView" @click="showChooser">選擇工具</button>
         <button @click="returnToAdmin">返回後台</button>
         <button @click="returnHome">返回首頁</button>
@@ -39,11 +41,25 @@
     <section v-else-if="selectedView === 'moneydam'" class="moneydam-view">
       <MoneydamDashboard />
     </section>
+    <section v-else-if="selectedView === 'bengo'" class="bengo-view">
+      <header class="bengo-title">
+        <h1>🐋 Bengo 籌碼大戶趨勢分析</h1>
+        <p>大戶持股比例、股價與人數的歷史趨勢比較</p>
+      </header>
+      <BengoDashboard />
+    </section>
+    <section v-else-if="selectedView === 'media-tools'" class="media-tools-view">
+      <header class="media-tools-title">
+        <h1>🎵 影音轉檔與切割工具</h1>
+        <p>3GP／3GPP 轉 MP3、音訊優化與線上分段切割</p>
+      </header>
+      <MediaToolsDashboard />
+    </section>
     <section v-else class="tool-chooser">
       <div class="chooser-panel">
         <p class="chooser-kicker">PRIVATE CONSOLE</p>
         <h1>選擇要進入的總經工具</h1>
-        <p>五個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
+        <p>七個工具共用這個獨立頁面；網址會保留目前選擇，重新整理不會回到後台。</p>
         <div class="tool-grid">
           <button class="tool-card macrowave-card" @click="selectView('macrowave')">
             <span>📊</span><strong>MacroWave 總經戰情室</strong><small>台美市場、領先指標與風險監控</small>
@@ -59,6 +75,12 @@
           </button>
           <button class="tool-card moneydam-card" @click="selectView('moneydam')">
             <span>💧</span><strong>六大水庫資金流向分析</strong><small>外匯、債券、通膨、銀行與房地產資金流向</small>
+          </button>
+          <button class="tool-card bengo-card" @click="selectView('bengo')">
+            <span>🐋</span><strong>Bengo 大戶籌碼分析</strong><small>大戶持股比例、股價與人數的長期趨勢</small>
+          </button>
+          <button class="tool-card media-tools-card" @click="selectView('media-tools')">
+            <span>🎵</span><strong>影音轉檔與切割</strong><small>3GP 轉 MP3、音訊優化與分段切割</small>
           </button>
         </div>
       </div>
@@ -83,6 +105,8 @@ import { getTodayPassword } from '@/utils/auth'
 import StockIndicatorDashboard from '@/components/stock-dashboard/Dashboard.vue'
 import TwstocktrackerDashboard from '@/components/twstocktracker/Dashboard.vue'
 import MoneydamDashboard from '@/components/moneydam/Dashboard.vue'
+import BengoDashboard from '@/components/bengo/Dashboard.vue'
+import MediaToolsDashboard from '@/components/media-tools/Dashboard.vue'
 
 useHead({
   title: '隱藏總經工具後台',
@@ -95,7 +119,7 @@ const macrowaveMode = useState('macrowaveMode', () => false)
 const unlocked = ref(false)
 const password = ref('')
 const errorMessage = ref('')
-const selectedView = computed(() => ['macrowave', 'eco4cycles', 'stock-dashboard', 'twstocktracker', 'moneydam'].includes(String(route.query.view)) ? String(route.query.view) : '')
+const selectedView = computed(() => ['macrowave', 'eco4cycles', 'stock-dashboard', 'twstocktracker', 'moneydam', 'bengo', 'media-tools'].includes(String(route.query.view)) ? String(route.query.view) : '')
 
 macrowaveMode.value = true
 
@@ -146,6 +170,8 @@ onBeforeUnmount(() => {
 .stock-dashboard-card { background: linear-gradient(135deg, #7c3aed, #db2777); }
 .twstocktracker-card { background: linear-gradient(135deg, #ea580c, #dc2626); }
 .moneydam-card { background: linear-gradient(135deg, #059669, #0f766e); }
+.bengo-card { background: linear-gradient(135deg, #1d4ed8, #4338ca); }
+.media-tools-card { background: linear-gradient(135deg, #7c3aed, #4f46e5); }
 .eco4cycles-view { min-height: calc(100vh - 62px); padding-bottom: 2rem; background: #f8f9fa; }
 .eco4cycles-title { padding: 2rem 1rem; color: #fff; text-align: center; background: linear-gradient(135deg, #065f46, #0f766e); }
 .eco4cycles-title h1 { margin: 0 0 .35rem; font-weight: 900; }
@@ -159,6 +185,12 @@ onBeforeUnmount(() => {
 .twstocktracker-title h1 { margin: 0 0 .35rem; font-weight: 900; }
 .twstocktracker-title p { margin: 0; opacity: .88; }
 .moneydam-view { min-height: calc(100vh - 62px); }
+.bengo-view, .media-tools-view { min-height: calc(100vh - 62px); }
+.bengo-title, .media-tools-title { padding: 2rem 1rem; color: #fff; text-align: center; }
+.bengo-title { background: linear-gradient(135deg, #1e40af, #4338ca); }
+.media-tools-title { background: linear-gradient(135deg, #6d28d9, #4338ca); }
+.bengo-title h1, .media-tools-title h1 { margin: 0 0 .35rem; font-weight: 900; }
+.bengo-title p, .media-tools-title p { margin: 0; opacity: .88; }
 .macrowave-login { background: linear-gradient(135deg, #eef2ff 0%, #ecfeff 100%); }
 .macrowave-login .card { max-width: 26rem; }
 @media (max-width: 700px) {
