@@ -1,0 +1,65 @@
+name: Build TwStockTracker for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/fred-mark17-windows-build
+    tags:
+      - twstocktracker-v*
+    paths:
+      - tools/twstocktracker/**
+      - .github/workflows/build-twstocktracker-windows.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/twstocktracker/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r tools/twstocktracker/requirements.txt pyinstaller==6.18.0
+      - name: Run tests
+        run: python -m unittest tools/twstocktracker/test_stock_tracker.py
+      - name: Build Windows executable
+        run: >-
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name TwStockTracker
+          --collect-all matplotlib
+          --collect-all bs4
+          tools/twstocktracker/stock_tracker.py
+      - name: Assemble download folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item dist/TwStockTracker.exe package/
+          Copy-Item tools/twstocktracker/stock_tracker_settings.example.json package/
+          Copy-Item tools/twstocktracker/README.md package/README.md
+          Compress-Archive -Path package/TwStockTracker.exe,package/stock_tracker_settings.example.json,package/README.md -DestinationPath TwStockTracker_Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TwStockTracker_Windows
+          path: package/*
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/twstocktracker-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            package/TwStockTracker.exe `
+            package/stock_tracker_settings.example.json `
+            TwStockTracker_Windows.zip `
+            --title "TwStockTracker Windows $env:GITHUB_REF_NAME" `
+            --notes "台股類股、個股與成交額 Top 30 爬蟲；同步至 590bbs 隱藏後台。"
