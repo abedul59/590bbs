@@ -270,12 +270,11 @@ const forceSyncNewData = async () => {
     const { data: syncRes } = await useFetch(url)
     if (syncRes.value?.success) {
       currentData.value = syncRes.value.data; activeTab.value = 'overview'; manualPmiInput.value = ''
+      if (syncRes.value.warning) dbWarning.value = syncRes.value.warning
       if (syncRes.value.db_error) dbWarning.value = `存檔失敗！原因：${syncRes.value.db_error}`
-      else {
-        const { data: dateRes } = await useFetch('/api/eco4cycles/history-dates')
-        if (dateRes.value?.success) historyDates.value = dateRes.value.dates
-        selectedDate.value = currentData.value.date
-      }
+      const { data: dateRes } = await useFetch('/api/eco4cycles/history-dates')
+      if (dateRes.value?.success) historyDates.value = dateRes.value.dates
+      selectedDate.value = currentData.value.date
     } else { errorMessage.value = syncRes.value?.error || '爬蟲執行失敗' }
   } catch (err) { errorMessage.value = err.message } finally { isLoading.value = false }
 }

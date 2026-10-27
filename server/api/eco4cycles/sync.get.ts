@@ -1,14 +1,39 @@
 // server/api/eco4cycles/sync.ts
 import { defineEventHandler, getQuery } from 'h3'
 import { serverSupabaseClient } from '#supabase/server'
+import { fredConfigurationHelp, resolveFredApiKey } from '../../utils/fred'
+import { readEco4CyclesSnapshot } from '../../utils/eco4cyclesRecords'
 
 export default defineEventHandler(async (event) => {
-  const apiKey = process.env.FRED_API_KEY
-  if (!apiKey) return { success: false, error: '伺服器尚未設定 FRED_API_KEY' }
+  const apiKey = resolveFredApiKey(event)
   const now = new Date()
   const supabase = await serverSupabaseClient(event)
   const query = getQuery(event)
   const manualPmiInput = query.pmi ? parseFloat(query.pmi as string) : null
+
+  async function historicalFallback(reason: string) {
+    const { data: latestRecord } = await supabase
+      .from('eco4cycles_economic_records')
+      .select('*')
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const snapshot = await readEco4CyclesSnapshot()
+    const fallback = latestRecord || [...snapshot].sort((left, right) => right.date.localeCompare(left.date))[0]
+    if (fallback) {
+      return {
+        success: true,
+        data: fallback,
+        stale: true,
+        warning: `${reason} 因此暫時顯示 ${fallback.date} 的歷史快照。`
+      }
+    }
+    return { success: false, error: reason }
+  }
+
+  if (!apiKey) {
+    return historicalFallback(`FRED 金鑰目前未被部署執行階段讀取。${fredConfigurationHelp()}`)
+  }
 
   const { data: lastRecord } = await supabase.from('eco4cycles_economic_records').select('verdict, raw_data').order('date', { ascending: false }).limit(1).single()
 
@@ -31,6 +56,7 @@ export default defineEventHandler(async (event) => {
       const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${startDate.toISOString().split('T')[0]}`;
       const response = await fetch(url);
       const data = await response.json();
+      if (!response.ok || !Array.isArray(data?.observations)) return [];
       return data.observations.filter((o: any) => o.value !== '.').map((o: any) => ({ date: new Date(o.date), value: parseFloat(o.value) }));
     } catch { return []; }
   }
@@ -91,6 +117,10 @@ export default defineEventHandler(async (event) => {
   const [fed, icsa_peak, payems, retail_yoy, retail_ann, pce_ann, pcec96_ann, sentiment, dgorder_yoy, dgorder_ann, pnfi, prfi, gpdic1_ann, gpdic1_saar, cpi, t10y2y, govt, isratio, dr_con, dr_bus] = await Promise.all([
     fetchTrendData('FEDFUNDS'), fetchPeakReversal('ICSA', 2), fetchAnnualGrowth('PAYEMS'), fetchYoyData('RSAFS'), fetchAnnualGrowth('RSAFS'), fetchAnnualGrowth('PCE'), fetchAnnualGrowth('PCEC96'), fetchPeakReversal('UMCSENT', 1), fetchYoyData('DGORDER'), fetchAnnualGrowth('DGORDER'), fetchAnnualGrowth('PNFI'), fetchAnnualGrowth('PRFI'), fetchAnnualGrowth('GPDIC1'), fetchSaarData('GPDIC1'), fetchAnnualGrowth('CPIAUCSL'), fetchTrendData('T10Y2Y'), fetchAnnualGrowth('SLEXPND'), fetchPeakReversal('ISRATIO', 1), fetchAnnualGrowth('DRCLACBS'), fetchAnnualGrowth('DRBLACBS')
   ]);
+
+  if (![fed, icsa_peak, payems, retail_yoy, retail_ann, pce_ann, pcec96_ann, sentiment, dgorder_yoy, dgorder_ann, pnfi, prfi, gpdic1_ann, gpdic1_saar, cpi, t10y2y, govt, isratio, dr_con, dr_bus].some(Boolean)) {
+    return historicalFallback('FRED 未回傳任何有效資料；金鑰可能無效、尚未套用到此部署，或 FRED 服務暫時無法連線。')
+  }
 
   // 把 details 宣告為 any，讓我們可以塞入 trend_stats
   const details: any = {

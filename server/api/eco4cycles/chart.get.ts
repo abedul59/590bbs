@@ -1,5 +1,6 @@
 // server/api/eco4cycles/chart.ts
 import { defineEventHandler, getQuery } from 'h3'
+import { fredConfigurationHelp, resolveFredApiKey } from '../../utils/fred'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -8,8 +9,8 @@ export default defineEventHandler(async (event) => {
 
   if (!seriesId) return { success: false, error: '缺少指標 ID' }
 
-  const apiKey = process.env.FRED_API_KEY
-  if (!apiKey) return { success: false, error: '伺服器尚未設定 FRED_API_KEY' }
+  const apiKey = resolveFredApiKey(event)
+  if (!apiKey) return { success: false, error: `FRED 金鑰目前未被部署執行階段讀取。${fredConfigurationHelp()}` }
   const startDate = new Date()
   startDate.setDate(startDate.getDate() - days)
   const startStr = startDate.toISOString().split('T')[0]

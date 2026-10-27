@@ -42,6 +42,25 @@ test('media tools preserve direct large-file conversion and cutting endpoints', 
   assert.match(page, /URL\.revokeObjectURL/)
 })
 
+test('Eco4Cycles resolves FRED keys through server runtime config and keeps a snapshot fallback', async () => {
+  const [config, resolver, syncApi, chartApi, dashboard] = await Promise.all([
+    read('nuxt.config.ts'),
+    read('server/utils/fred.ts'),
+    read('server/api/eco4cycles/sync.get.ts'),
+    read('server/api/eco4cycles/chart.get.ts'),
+    read('components/eco4cycles/Dashboard.vue')
+  ])
+
+  assert.match(config, /fredApiKey:/)
+  assert.match(resolver, /NUXT_FRED_API_KEY/)
+  assert.match(resolver, /process\.env\.FRED_API_KEY/)
+  assert.match(syncApi, /resolveFredApiKey\(event\)/)
+  assert.match(syncApi, /readEco4CyclesSnapshot/)
+  assert.match(syncApi, /stale: true/)
+  assert.match(chartApi, /resolveFredApiKey\(event\)/)
+  assert.match(dashboard, /syncRes\.value\.warning/)
+})
+
 test('imported tools use namespaced APIs and portable database fallbacks', async () => {
   const [trackerTrigger, moneydamTrigger] = await Promise.all([
     read('server/api/twstocktracker/trigger.post.ts'),
