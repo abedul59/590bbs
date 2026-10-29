@@ -1,0 +1,91 @@
+name: Build MacroWave All In One for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/fred-mark17-windows-build
+    tags:
+      - macrowave-all-in-one-v*
+    paths:
+      - tools/all-in-one/**
+      - tools/macrowave_autosync/**
+      - tools/per_auto/**
+      - tools/twstocktracker/**
+      - tools/bengo-auto/**
+      - .github/workflows/build-all-in-one-windows.yml
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: tools/all-in-one/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install -r tools/all-in-one/requirements.txt pyinstaller==6.18.0
+      - name: Run unified controller tests
+        run: python -m unittest tools/all-in-one/test_all_in_one.py
+      - name: Run existing tool tests
+        shell: pwsh
+        run: |
+          Push-Location tools/macrowave_autosync
+          python -m unittest tests/test_autosync.py
+          Pop-Location
+          python -m unittest tools/per_auto/test_per_auto.py
+          python -m unittest tools/twstocktracker/test_stock_tracker.py
+          python -m unittest tools/bengo-auto/test_bengo_auto.py
+      - name: Build single GUI executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed `
+            --name MacroWave_AllInOne `
+            --add-data "tools/macrowave_autosync/MacroWave_AutoSync.py;workers" `
+            --add-data "tools/per_auto/PER_auto.py;workers" `
+            --add-data "tools/twstocktracker/stock_tracker.py;workers" `
+            --add-data "tools/bengo-auto/bengo_auto.py;workers" `
+            --collect-all bs4 `
+            --collect-all fredapi `
+            --collect-all html5lib `
+            --collect-all lxml `
+            --collect-all matplotlib `
+            --collect-all openpyxl `
+            --collect-all pandas `
+            --collect-all requests `
+            --collect-all selenium `
+            --collect-all urllib3 `
+            --collect-all webdriver_manager `
+            --collect-all xlrd `
+            tools/all-in-one/MacroWave_AllInOne.py
+      - name: Assemble release package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package
+          Copy-Item dist/MacroWave_AllInOne.exe package/
+          Copy-Item tools/all-in-one/README.md package/README.md
+          Compress-Archive -Path package/* -DestinationPath MacroWave_AllInOne_Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacroWave_AllInOne_Windows
+          path: package/*
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/macrowave-all-in-one-v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            package/MacroWave_AllInOne.exe `
+            MacroWave_AllInOne_Windows.zip `
+            --title "MacroWave All In One $env:GITHUB_REF_NAME" `
+            --notes "單一 GUI／EXE：一鍵更新 MacroWave、六大指標、本益比、台股資金流向與 Bengo。"
