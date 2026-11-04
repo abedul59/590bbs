@@ -8,11 +8,15 @@
 
     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm text-indigo-800 text-sm">
       <p class="font-bold mb-1">💡 運作原理：</p>
-      <p>cron-job.org 每小時呼叫下方的 Vercel 轉接網址。Vercel 立即回傳空內容，再於背景喚醒 Render，避免 Render 冷啟動畫面造成「Response data too big」。Render 恢復後會補處理最近 65 分鐘內尚未記錄的排程。</p>
+      <p>cron-job.org 每小時呼叫下方的 Vercel 轉接網址。Vercel 立即回傳極小的排程確認，再於背景喚醒 Render，避免 Render 冷啟動畫面造成「Response data too big」。Render 恢復後會補處理最近 65 分鐘內尚未記錄的排程。</p>
       <div class="mt-3 flex flex-col gap-2 md:flex-row md:items-center">
         <code class="flex-1 overflow-x-auto rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-900">{{ cronBridgeUrl }}</code>
         <button type="button" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700" @click="copyCronUrl">複製 cron-job.org 網址</button>
+        <button type="button" :disabled="isTesting" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50" @click="testCronBridge">
+          {{ isTesting ? '測試中…' : '立即測試喚醒' }}
+        </button>
       </div>
+      <p v-if="testMessage" :class="['mt-2 font-bold', testSucceeded ? 'text-emerald-700' : 'text-red-700']">{{ testMessage }}</p>
     </div>
 
     <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
@@ -56,16 +60,36 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 const supabase = useSupabaseClient()
-const cronBridgeUrl = 'https://shjhs-class-system.vercel.app/api/cron-render'
+const runtimeConfig = useRuntimeConfig()
+const cronBridgeUrl = computed(() => String(runtimeConfig.public.cronBridgeUrl || '').replace(/\/$/, ''))
 
 const schedules = ref([])
 const newTime = ref('08:00')
+const isTesting = ref(false)
+const testMessage = ref('')
+const testSucceeded = ref(false)
 
 const copyCronUrl = async () => {
-  await navigator.clipboard.writeText(cronBridgeUrl)
+  await navigator.clipboard.writeText(cronBridgeUrl.value)
   alert('已複製新的 cron-job.org 網址')
+}
+
+const testCronBridge = async () => {
+  isTesting.value = true
+  testMessage.value = ''
+  testSucceeded.value = false
+  try {
+    const result = await $fetch(cronBridgeUrl.value, { cache: 'no-store' })
+    if (!result?.success || result?.status !== 'queued') throw new Error('端點沒有回傳排程確認')
+    testSucceeded.value = true
+    testMessage.value = '✅ Vercel 轉接正常，Render 喚醒要求已排入背景執行。'
+  } catch (error) {
+    testMessage.value = `❌ 喚醒測試失敗：${error?.data?.message || error?.message || '無法連線'}`
+  } finally {
+    isTesting.value = false
+  }
 }
 
 const loadSchedules = async () => {

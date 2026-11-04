@@ -13,6 +13,7 @@ export default defineNuxtConfig({
     fredApiKey: process.env.FRED_API_KEY || process.env.FRED_KEY || '',
     public: {
       shjhsTelegramApiUrl: process.env.NUXT_PUBLIC_SHJHS_TELEGRAM_API_URL || 'https://five90bbs-telegram-shjhs-api.onrender.com',
+      cronBridgeUrl: process.env.NUXT_PUBLIC_CRON_BRIDGE_URL || 'https://590bbs.vercel.app/api/cron-render',
       macrowaveSyncApiUrls: process.env.NUXT_PUBLIC_MACROWAVE_SYNC_API_URLS || '',
       macrowaveTwstockSyncApiUrl: process.env.NUXT_PUBLIC_MACROWAVE_TWSTOCK_SYNC_API_URL || ''
     }

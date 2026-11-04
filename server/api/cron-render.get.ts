@@ -31,8 +31,11 @@ export default defineEventHandler((event) => {
     void task
   }
 
-  setResponseStatus(event, 204)
+  setResponseStatus(event, 202)
   setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0')
-  setResponseHeader(event, 'Content-Length', '0')
-  return null
+  return {
+    success: true,
+    status: 'queued',
+    message: 'Render 喚醒要求已排入背景執行',
+  }
 })
