@@ -135,6 +135,38 @@ def load_config():
 
 APP_CONFIG = load_config()
 
+
+def create_fred_client():
+    """建立 FRED client；缺少設定或套件時明確回傳 None。"""
+    api_key = APP_CONFIG["fred_api_key"]
+    if not api_key:
+        return None
+    try:
+        from fredapi import Fred
+        return Fred(api_key=api_key)
+    except Exception as error:
+        log_msg(f"FRED client 初始化失敗: {error}")
+        return None
+
+
+def latest_fred_observation(fred, series_id, max_age_days=None, now=None):
+    """回傳 FRED 最新非空值；過期資料視為缺值，避免把舊資料當成目前值。"""
+    if fred is None:
+        return None, None
+    try:
+        series = fred.get_series(series_id).dropna()
+        if series.empty:
+            return None, None
+        observed_at = pd.Timestamp(series.index[-1]).tz_localize(None)
+        current = pd.Timestamp(now or datetime.datetime.now()).tz_localize(None)
+        if max_age_days is not None and (current.normalize() - observed_at.normalize()).days > max_age_days:
+            log_msg(f"FRED {series_id} 最新資料已過期: {observed_at.strftime('%Y-%m-%d')}")
+            return None, None
+        return observed_at.strftime("%Y-%m-%d"), float(series.iloc[-1])
+    except Exception as error:
+        log_msg(f"FRED {series_id} 讀取失敗: {error}")
+        return None, None
+
 # ==========================================
 # 共用日誌系統
 # ==========================================
@@ -175,18 +207,38 @@ class MacroWaveA_Logic:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Referer': 'https://www.google.com/'
         }
+        self.fred = create_fred_client()
 
     def get_us_bond_yields(self):
+        fred_results = {}
+        for key, series_id in (("3M", "DGS3MO"), ("10Y", "DGS10")):
+            date_str, value = latest_fred_observation(self.fred, series_id, max_age_days=14)
+            if value is not None:
+                fred_results[key] = value
+                fred_results[f"{key}_Date"] = date_str
+        if len([key for key in ("3M", "10Y") if key in fred_results]) == 2:
+            log_msg(
+                f"美債殖利率 (FRED): 3M={fred_results['3M']}%, 10Y={fred_results['10Y']}%"
+            )
+            return fred_results["3M"], fred_results["10Y"], {
+                "3M": fred_results["3M_Date"], "10Y": fred_results["10Y_Date"], "source": "FRED"
+            }
+
         urls = {'3M': 'https://www.cnyes.com/futures/html5chart/TB3MY.html', '10Y': 'https://www.cnyes.com/futures/html5chart/US10YY.html'}
-        results = {}
+        results = dict(fred_results)
         for key, url in urls.items():
+            if key in results:
+                continue
             try:
                 r = requests.get(url, headers=self.headers, verify=False, timeout=10)
                 df = pd.read_html(StringIO(r.text))[0]
-                results[key] = float(df.iloc[0, 1])
-            except: 
-                results[key] = 0.0
-        return results.get('3M', 0), results.get('10Y', 0)
+                value = float(df.iloc[0, 1])
+                if value > 0:
+                    results[key] = value
+            except Exception as error:
+                log_msg(f"美債 {key} 備援來源讀取失敗: {error}")
+        source = "FRED／鉅亨備援" if fred_results else "鉅亨備援"
+        return results.get('3M'), results.get('10Y'), {"source": source}
 
     def get_crb_index(self):
         crb = "N/A"
@@ -207,13 +259,14 @@ class MacroWaveA_Logic:
         return crb, "N/A", "N/A"
 
     def run(self):
-        b3, b10 = self.get_us_bond_yields()
+        b3, b10, yield_meta = self.get_us_bond_yields()
         c_idx, c_h, c_y = self.get_crb_index()
-        try: spread = round(b10 - b3, 4)
-        except: spread = 0
+        spread = round(b10 - b3, 4) if b3 is not None and b10 is not None else None
         return {
             "Date": datetime.datetime.now().strftime("%Y-%m-%d"),
             "US_3M": b3, "US_10Y": b10, "Spread_3M_10Y": spread,
+            "US_3M_Date": yield_meta.get("3M"), "US_10Y_Date": yield_meta.get("10Y"),
+            "US_Yield_Source": yield_meta.get("source"),
             "CRB_Index": c_idx, "CRB_HalfYear": c_h, "CRB_OneYear": c_y
         }
 
@@ -223,13 +276,7 @@ class MacroWaveA_Logic:
 class MacroWaveBC_Logic:
     def __init__(self):
         self.fred_key = APP_CONFIG["fred_api_key"]
-        try:
-            if not self.fred_key:
-                raise ValueError("尚未設定 FRED API Key")
-            from fredapi import Fred
-            self.fred = Fred(api_key=self.fred_key)
-        except (ImportError, ValueError):
-            self.fred = None
+        self.fred = create_fred_client()
 
         if getattr(sys, 'frozen', False):
             self.base_dir = os.path.dirname(sys.executable)
@@ -493,6 +540,13 @@ class MacroWaveBC_Logic:
 
     # --- 衰退機率 (還原您的 GUI 版本邏輯) ---
     def get_recession_prob(self):
+        fred_date, fred_value = latest_fred_observation(
+            self.fred, "RECPROUSM156N", max_age_days=180
+        )
+        if fred_value is not None:
+            log_msg(f"衰退機率 (FRED): {fred_value:.2f}% ({fred_date})")
+            return fred_date, f"{fred_value:.2f}%"
+
         self.clear_temp()
         success = False
         target_file = None
@@ -535,7 +589,12 @@ class MacroWaveBC_Logic:
                 df = pd.read_excel(target_file)
                 last = df.tail(1)
                 try:
-                    date_val = str(last.iloc[0, 0])[:10]
+                    observed_at = pd.Timestamp(last.iloc[0, 0]).tz_localize(None)
+                    age_days = (pd.Timestamp.now().normalize() - observed_at.normalize()).days
+                    if age_days > 180:
+                        log_msg(f"衰退機率本機備份已過期: {observed_at.strftime('%Y-%m-%d')}")
+                        return "N/A", "N/A"
+                    date_val = observed_at.strftime("%Y-%m-%d")
                     prob_val = f"{round(float(last.iloc[0, 5])*100, 2)}%" 
                     return date_val, prob_val
                 except Exception as ex:
@@ -664,13 +723,21 @@ class MacroWaveBC_Logic:
 class MacroWaveD_Logic:
     def __init__(self):
         self.headers = {'User-Agent': 'Mozilla/5.0'}
+        self.fred = create_fred_client()
 
     def get_us_10y(self):
-        try: return MacroWaveA_Logic().get_us_bond_yields()[1]
-        except: return 0.0
+        _date, value = latest_fred_observation(self.fred, "DGS10", max_age_days=14)
+        if value is not None:
+            return value
+        try:
+            return MacroWaveA_Logic().get_us_bond_yields()[1]
+        except Exception:
+            return None
 
     def get_jp_10y(self):
-        jp10y = 0.0
+        _date, fred_value = latest_fred_observation(self.fred, "IRLTLT01JPM156N", max_age_days=120)
+        if fred_value is not None:
+            return fred_value
         try:
             url = "https://www.cnyes.com/futures/html5chart/JP10YY.html"
             r = requests.get(url, headers=self.headers, verify=False, timeout=10)
@@ -686,13 +753,14 @@ class MacroWaveD_Logic:
             if m: return float(m.group(1))
         except: pass
 
-        return jp10y
+        return None
 
     def run(self):
         us = self.get_us_10y()
         jp = self.get_jp_10y()
-        spread = round(us - jp, 4)
-        return {"US_10Y": us, "JP_10Y": jp, "Spread": spread}
+        spread = round(us - jp, 4) if us is not None and jp is not None else None
+        return {"US_10Y": us, "JP_10Y": jp, "Spread": spread,
+                "status": "Unavailable" if spread is None else ("Danger" if spread < 2.0 else "Safe")}
 
 # ==========================================
 # 邏輯區塊 E: 貴金屬
@@ -790,13 +858,7 @@ class MacroWaveGlobalMarket_Logic:
 class MacroWaveMark17_Logic:
     def __init__(self):
         self.fred_key = APP_CONFIG["fred_api_key"]
-        try:
-            if not self.fred_key:
-                raise ValueError("尚未設定 FRED API Key")
-            from fredapi import Fred
-            self.fred = Fred(api_key=self.fred_key)
-        except:
-            self.fred = None
+        self.fred = create_fred_client()
         self.headers = {'User-Agent': 'Mozilla/5.0'}
         
         if getattr(sys, 'frozen', False):
@@ -924,19 +986,25 @@ class MacroWaveMark17_Logic:
         except: details.append(("市值貨幣比", "Error", "0"))
 
         try:
-            spread = float(data_a.get('Spread_3M_10Y', 0))
+            spread_raw = data_a.get('Spread_3M_10Y')
+            if spread_raw is None:
+                raise ValueError("missing")
+            spread = float(spread_raw)
             if spread < 0:
                 score += 3; details.append(("殖利率倒掛", f"{spread}", "+3"))
             else: details.append(("殖利率倒掛", f"{spread}", "0"))
-        except: details.append(("殖利率", "Error", "0"))
+        except: details.append(("殖利率倒掛", "N/A (美債資料缺失)", "-"))
 
         try:
-            rp_str = data_b.get('Recession_Prob', "0").replace('%', '')
+            recession_raw = data_b.get('Recession_Prob')
+            if recession_raw in (None, "", "N/A", "Error"):
+                raise ValueError("missing")
+            rp_str = str(recession_raw).replace('%', '')
             rp = float(rp_str)
             if rp > 20:
                 score += 1; details.append(("衰退機率 > 20%", f"{rp}%", "+1"))
             else: details.append(("衰退機率 > 20%", f"{rp}%", "0"))
-        except: details.append(("衰退機率", "Error", "0"))
+        except: details.append(("衰退機率 > 20%", "N/A (資料缺失或過期)", "-"))
 
         gap = self.get_us_inflation_gap()
         if gap is None:
@@ -986,7 +1054,11 @@ class MacroWaveJSON_Logic:
         raw_indicators['Mark17_Score'] = mark17_score
         
         export_data['raw_indicators'] = raw_indicators
-        export_data['us_jp_spread'] = {'us': data_d.get('US_10Y', 0), 'jp': data_d.get('JP_10Y', 0), 'spread': data_d.get('Spread', 0), 'status': "Danger" if data_d.get('Spread', 0) < 2.0 else "Safe"}
+        spread_value = data_d.get('Spread')
+        export_data['us_jp_spread'] = {
+            'us': data_d.get('US_10Y'), 'jp': data_d.get('JP_10Y'), 'spread': spread_value,
+            'status': data_d.get('status') or ("Unavailable" if spread_value is None else ("Danger" if spread_value < 2.0 else "Safe"))
+        }
         export_data['metals'] = [{'name': m['name'], 'current': m['current'], 'drop': m['drop_pct'], 'status': "Danger" if m['drop_pct'] >= 50 else "Safe"} for m in data_e]
         export_data['currencies'] = data_currency
         export_data['global_markets'] = data_global

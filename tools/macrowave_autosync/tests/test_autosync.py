@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
+import pandas as pd
+
 import MacroWave_AutoSync as autosync
 
 
@@ -87,6 +89,75 @@ class Mark17Tests(unittest.TestCase):
         fred_rows = [row for row in result["mark17"] if "FRED" in str(row["value"])]
         self.assertEqual(len(fred_rows), 2)
         self.assertTrue(all(row["status"] == "Unavailable" for row in fred_rows))
+
+    def test_missing_yield_and_recession_are_unavailable_not_zero_risk(self):
+        score, details = self.make_logic(gap=0, bei=2).calculate_score(
+            {"Spread_3M_10Y": None},
+            {"M1b_YoY": 1, "MV_Ratio": 1, "Recession_Prob": "N/A"},
+            {"Unemployment": 3},
+        )
+
+        unavailable = [row for row in details if row[2] == "-"]
+        self.assertTrue(any(row[0] == "殖利率倒掛" for row in unavailable))
+        self.assertTrue(any(row[0] == "衰退機率 > 20%" for row in unavailable))
+
+
+class FredObservationTests(unittest.TestCase):
+    def test_latest_non_empty_fred_value_and_date(self):
+        fred = Mock()
+        fred.get_series.return_value = pd.Series(
+            [4.1, None, 4.25],
+            index=pd.to_datetime(["2026-10-30", "2026-11-01", "2026-11-03"]),
+        )
+
+        date_str, value = autosync.latest_fred_observation(
+            fred, "DGS10", max_age_days=14, now="2026-11-04"
+        )
+
+        self.assertEqual(date_str, "2026-11-03")
+        self.assertEqual(value, 4.25)
+
+    def test_stale_fred_value_is_rejected(self):
+        fred = Mock()
+        fred.get_series.return_value = pd.Series(
+            [12.76], index=pd.to_datetime(["2022-09-01"])
+        )
+
+        self.assertEqual(
+            autosync.latest_fred_observation(
+                fred, "RECPROUSM156N", max_age_days=180, now="2026-11-04"
+            ),
+            (None, None),
+        )
+
+    def test_us_yields_prefer_fred_and_include_observation_dates(self):
+        fred = Mock()
+        fred.get_series.side_effect = [
+            pd.Series([3.75], index=pd.to_datetime(["2026-11-03"])),
+            pd.Series([4.25], index=pd.to_datetime(["2026-11-03"])),
+        ]
+        logic = autosync.MacroWaveA_Logic.__new__(autosync.MacroWaveA_Logic)
+        logic.fred = fred
+        logic.headers = {}
+
+        with patch.object(autosync.datetime, "datetime", wraps=autosync.datetime.datetime) as dt:
+            dt.now.return_value = autosync.datetime.datetime(2026, 11, 4)
+            three_month, ten_year, metadata = logic.get_us_bond_yields()
+
+        self.assertEqual((three_month, ten_year), (3.75, 4.25))
+        self.assertEqual(metadata, {"3M": "2026-11-03", "10Y": "2026-11-03", "source": "FRED"})
+
+    def test_recession_probability_prefers_current_fred_value(self):
+        fred = Mock()
+        fred.get_series.return_value = pd.Series(
+            [8.5], index=pd.to_datetime(["2026-10-01"])
+        )
+        logic = autosync.MacroWaveBC_Logic.__new__(autosync.MacroWaveBC_Logic)
+        logic.fred = fred
+
+        with patch.object(autosync.datetime, "datetime", wraps=autosync.datetime.datetime) as dt:
+            dt.now.return_value = autosync.datetime.datetime(2026, 11, 4)
+            self.assertEqual(logic.get_recession_prob(), ("2026-10-01", "8.50%"))
 
 
 class LeadingIndicatorTests(unittest.TestCase):

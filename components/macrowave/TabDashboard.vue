@@ -88,19 +88,22 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="text-muted fw-bold">🇺🇸 美債 10Y</span>
-                            <span class="fw-bold fs-5">{{ dashboardData.content.us_jp_spread.us }}%</span>
+                            <span class="fw-bold fs-5">{{ displayPercent(dashboardData.content.us_jp_spread.us) }}</span>
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="text-muted fw-bold">🇯🇵 日債 10Y</span>
-                            <span class="fw-bold fs-5">{{ dashboardData.content.us_jp_spread.jp }}%</span>
+                            <span class="fw-bold fs-5">{{ displayPercent(dashboardData.content.us_jp_spread.jp) }}</span>
                         </div>
                         <hr>
                         <div class="d-flex justify-content-between align-items-center">
                             <span class="fw-bold fs-5">利差 (Spread)</span>
-                            <span :class="['fs-3 fw-bold', 'status-' + dashboardData.content.us_jp_spread.status]">{{ dashboardData.content.us_jp_spread.spread }}%</span>
+                            <span :class="['fs-3 fw-bold', 'status-' + dashboardData.content.us_jp_spread.status]">{{ displayPercent(dashboardData.content.us_jp_spread.spread) }}</span>
                         </div>
-                        <div v-if="dashboardData.content.us_jp_spread.spread < 2.0" class="alert alert-danger mt-3 mb-0 py-2 text-center fw-bold">
+                        <div v-if="isNumeric(dashboardData.content.us_jp_spread.spread) && dashboardData.content.us_jp_spread.spread < 2.0" class="alert alert-danger mt-3 mb-0 py-2 text-center fw-bold">
                             ⚠️ 警告：利差跌破 2%
+                        </div>
+                        <div v-else-if="!isNumeric(dashboardData.content.us_jp_spread.spread)" class="alert alert-secondary mt-3 mb-0 py-2 text-center fw-bold">
+                            資料暫缺，不納入風險判斷
                         </div>
                     </div>
                 </div>
@@ -197,9 +200,9 @@
                     <div class="card-header bg-light fw-bold text-secondary">📉 美國債市與利率</div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-6"><div class="metric-item"><div class="metric-label">美債 10年殖利率</div><div class="metric-value font-monospace">{{ dashboardData.content.raw_indicators.US_10Y || "--" }}%</div></div></div>
-                            <div class="col-6"><div class="metric-item"><div class="metric-label">美債 3個月殖利率</div><div class="metric-value font-monospace">{{ dashboardData.content.raw_indicators.US_3M || "--" }}%</div></div></div>
-                            <div class="col-6"><div class="metric-item"><div class="metric-label">長短利差 (10Y-3M)</div><div :class="['metric-value font-monospace fs-4', dashboardData.content.raw_indicators.Spread_3M_10Y < 0 ? 'text-danger' : '']">{{ dashboardData.content.raw_indicators.Spread_3M_10Y || "--" }}</div></div></div>
+                            <div class="col-6"><div class="metric-item"><div class="metric-label">美債 10年殖利率</div><div class="metric-value font-monospace">{{ displayPercent(dashboardData.content.raw_indicators.US_10Y) }}</div><div class="metric-sub text-muted small mt-1">{{ dashboardData.content.raw_indicators.US_10Y_Date || dashboardData.content.raw_indicators.US_Yield_Source || '' }}</div></div></div>
+                            <div class="col-6"><div class="metric-item"><div class="metric-label">美債 3個月殖利率</div><div class="metric-value font-monospace">{{ displayPercent(dashboardData.content.raw_indicators.US_3M) }}</div><div class="metric-sub text-muted small mt-1">{{ dashboardData.content.raw_indicators.US_3M_Date || dashboardData.content.raw_indicators.US_Yield_Source || '' }}</div></div></div>
+                            <div class="col-6"><div class="metric-item"><div class="metric-label">長短利差 (10Y-3M)</div><div :class="['metric-value font-monospace fs-4', dashboardData.content.raw_indicators.Spread_3M_10Y < 0 ? 'text-danger' : '']">{{ displayNumber(dashboardData.content.raw_indicators.Spread_3M_10Y) }}</div></div></div>
                             <div class="col-6"><div class="metric-item"><div class="metric-label">衰退機率</div><div class="metric-value text-danger font-monospace fs-4">{{ dashboardData.content.raw_indicators.Recession_Prob || "--" }}</div><div class="metric-sub text-muted small mt-1">{{ dashboardData.content.raw_indicators.Recession_Date || "" }}</div></div></div>
                         </div>
                     </div>
@@ -292,6 +295,9 @@ const rawResponseData = ref(null);
 const isLoading = ref(true);
 const loadError = ref('');
 const dashboardData = computed(() => rawResponseData.value);
+const isNumeric = value => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+const displayNumber = value => isNumeric(value) ? Number(value) : '--';
+const displayPercent = value => isNumeric(value) ? `${Number(value)}%` : '--';
 const dataSourceDisplay = computed(() => {
     if (!dashboardData.value) return '無數據';
     return `${dashboardData.value.source_type || '未知'} (時間: ${dashboardData.value.content?.update_time || '--'})`;
