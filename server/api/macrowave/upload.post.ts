@@ -1,4 +1,5 @@
 import { serverSupabaseClient } from '#supabase/server'
+import { isMacrowaveContent } from '../../utils/macrowaveRecords'
 
 export default defineEventHandler(async (event) => {
   // 檢查 API 密鑰
@@ -11,8 +12,11 @@ export default defineEventHandler(async (event) => {
 
   // 讀取傳入的 JSON 數據
   const body = await readBody(event)
-  if (!body) {
-    throw createError({ statusCode: 400, statusMessage: '未找到有效數據' })
+  if (!isMacrowaveContent(body)) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'JSON 不是有效的 MacroWave 資料（缺少 Mark 17、總分或總經原始指標）'
+    })
   }
 
   // 自動判斷來源：如果是 Python 爬蟲推送過來的，User-Agent 通常包含 python-requests

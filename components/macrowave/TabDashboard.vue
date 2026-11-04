@@ -56,6 +56,7 @@
         </div>
       </div>
     </div>
+    <div v-if="loadError" class="alert alert-danger fw-bold">{{ loadError }}</div>
 
     <div v-if="dashboardData">
         
@@ -65,7 +66,7 @@
                     <h5 class="text-muted mb-3 text-uppercase fw-bold">Mark 17 總經風險評分</h5>
                     <div class="d-flex justify-content-center align-items-center gap-4 flex-wrap">
                         <div class="d-flex align-items-baseline">
-                            <span class="display-3 fw-bold text-dark">{{ dashboardData.content.total_score }}</span>
+                            <span class="display-3 fw-bold text-dark">{{ dashboardData.content.total_score ?? '--' }}</span>
                             <span class="text-muted fs-4 ms-2">/ 15</span>
                         </div>
                         <div :class="['advice-badge', 'advice-' + dashboardData.content.advice]">策略建議: {{ dashboardData.content.advice }}</div>
@@ -289,6 +290,7 @@ import Mark17Table from './Mark17Table.vue'
 
 const rawResponseData = ref(null);
 const isLoading = ref(true);
+const loadError = ref('');
 const dashboardData = computed(() => rawResponseData.value);
 const dataSourceDisplay = computed(() => {
     if (!dashboardData.value) return '無數據';
@@ -319,6 +321,7 @@ const fetchHistoryList = async () => {
 
 const fetchDashboardData = async (fileId) => {
     isLoading.value = true;
+    loadError.value = '';
     try {
         let url = '/api/macrowave/latest';
         if (fileId !== 'latest') {
@@ -326,11 +329,16 @@ const fetchDashboardData = async (fileId) => {
         }
         
         const res = await $fetch(url);
-        if (res && res.data) {
+        if (res && res.data?.content) {
             rawResponseData.value = res.data;
+        } else {
+            rawResponseData.value = null;
+            loadError.value = '目前沒有有效的 MacroWave 戰情資料，請使用最新版整合 EXE 重新上傳。';
         }
     } catch (e) {
         console.error('資料載入失敗', e);
+        rawResponseData.value = null;
+        loadError.value = 'MacroWave 資料載入失敗，所選紀錄可能不是總經戰情資料。';
     } finally { 
         isLoading.value = false; 
     }
