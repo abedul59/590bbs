@@ -18,10 +18,11 @@ test('MacroWave APIs isolate shared-table records by source and payload shape', 
     assert.match(source, /\.in\('source_type'/)
     assert.match(source, /isMacrowaveContent/)
   }
-  assert.match(upload, /isMacrowaveContent\(body\)/)
+  assert.match(upload, /isCompleteMacrowaveContent\(body\)/)
   assert.match(validator, /Render 自動同步/)
   assert.match(validator, /GUI JSON 手動上傳/)
-  assert.match(validator, /content\.mark17/)
+  assert.match(validator, /isCompleteMacrowaveContent/)
+  assert.match(validator, /value\.mark17/)
   assert.doesNotMatch(latest, /\.limit\(1\)\s*\.single\(\)/)
 })
 

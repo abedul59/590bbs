@@ -1,5 +1,5 @@
 import { serverSupabaseClient } from '#supabase/server'
-import { isMacrowaveContent } from '../../utils/macrowaveRecords'
+import { isCompleteMacrowaveContent } from '../../utils/macrowaveRecords'
 
 export default defineEventHandler(async (event) => {
   // 檢查 API 密鑰
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   // 讀取傳入的 JSON 數據
   const body = await readBody(event)
-  if (!isMacrowaveContent(body)) {
+  if (!isCompleteMacrowaveContent(body)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'JSON 不是有效的 MacroWave 資料（缺少 Mark 17、總分或總經原始指標）'

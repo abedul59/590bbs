@@ -18,8 +18,11 @@ export function isMacrowaveContent(value: unknown): value is MacrowaveContent {
     && typeof content.raw_indicators === 'object'
     && !Array.isArray(content.raw_indicators)
   )
-  const hasMark17 = Array.isArray(content.mark17) || Array.isArray(content.mark17_details)
-
   // 舊版資料可能尚未輸出 Mark 17 明細，但一定具有總分與總經原始指標。
-  return hasScore && hasRawIndicators && hasMark17
+  return hasScore && hasRawIndicators
+}
+
+export function isCompleteMacrowaveContent(value: unknown): value is MacrowaveContent {
+  if (!isMacrowaveContent(value)) return false
+  return Array.isArray(value.mark17) || Array.isArray(value.mark17_details)
 }
