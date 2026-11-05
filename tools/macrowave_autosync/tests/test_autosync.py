@@ -1,4 +1,5 @@
 import json
+import io
 import os
 import tempfile
 import unittest
@@ -55,6 +56,18 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config["fred_api_key"], "configured-key")
             self.assertEqual(config["fred_api_key_source"], config_path)
 
+
+class LoggingTests(unittest.TestCase):
+    def test_chinese_log_recovers_from_legacy_windows_encoding(self):
+        raw = io.BytesIO()
+        stream = io.TextIOWrapper(raw, encoding="cp1252")
+        try:
+            with patch.object(autosync.sys, "stdout", stream):
+                autosync.log_msg("衰退機率讀取成功")
+                stream.flush()
+            self.assertIn("衰退機率讀取成功", raw.getvalue().decode("utf-8"))
+        finally:
+            stream.detach()
 
 class Mark17Tests(unittest.TestCase):
     def make_logic(self, gap=5.0, bei=3.0):

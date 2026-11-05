@@ -172,7 +172,24 @@ def latest_fred_observation(fred, series_id, max_age_days=None, now=None):
 # ==========================================
 def log_msg(msg):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now}] {msg}")
+    line = f"[{now}] {msg}"
+    try:
+        print(line)
+    except UnicodeEncodeError:
+        # 某些 Windows 排程器／CI 管線會把 stdout 設為 cp1252，中文紀錄
+        # 因而讓整個更新工作中止。改成 UTF-8 後重試；不支援 reconfigure
+        # 的自訂輸出串流則以可編碼文字降級，資料抓取不可因日誌失敗。
+        output = sys.stdout
+        if hasattr(output, "reconfigure"):
+            try:
+                output.reconfigure(encoding="utf-8", errors="replace")
+                print(line)
+                return
+            except (OSError, UnicodeError, ValueError):
+                pass
+        encoding = getattr(output, "encoding", None) or "ascii"
+        safe_line = line.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_line)
 
 # ==========================================
 # 0. 驅動程式自動檢測與下載
