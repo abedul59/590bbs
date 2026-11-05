@@ -41,6 +41,24 @@ class PerAutoTests(unittest.TestCase):
             'pe_low': 17.24,
         })
 
+    def test_q4_check_is_only_active_from_january_to_march(self):
+        status = per_auto.assess_annual_report_status(2026, 11, ['2026.2Q', '2026.1Q', '2025.4Q'])
+
+        self.assertFalse(status['active'])
+        self.assertFalse(status['use_estimation'])
+        self.assertTrue(status['found'])
+        self.assertIn('非年初年報檢查期間', status['reason'])
+
+    def test_q4_check_estimates_only_when_prior_q4_is_missing_early_in_year(self):
+        missing = per_auto.assess_annual_report_status(2027, 2, ['2026.3Q', '2026.2Q', '2026.1Q'])
+        published = per_auto.assess_annual_report_status(2027, 3, ['2027.1Q', '2026.4Q'])
+
+        self.assertTrue(missing['active'])
+        self.assertTrue(missing['use_estimation'])
+        self.assertEqual(missing['target_quarter'], '2026.4Q')
+        self.assertTrue(published['found'])
+        self.assertFalse(published['use_estimation'])
+
     def test_2330_like_data_scores_all_six_indicators(self):
         ratings = [
             per_auto.rate_revenue([54.65, 53.32, 44.69, 67.87, 30.09, 17.50])[0],

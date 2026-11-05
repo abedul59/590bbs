@@ -82,3 +82,12 @@ test('stock valuation shows current and forward estimated price and PE bands', a
   assert.match(dashboard, /當年度預估最高／最低價/)
   assert.match(dashboard, /當年度預估本益比/)
 })
+
+test('Q4 annual report check is limited to the first quarter', async () => {
+  const dashboard = await read('components/stock-dashboard/Dashboard.vue')
+
+  assert.match(dashboard, /annualReportCheckActive/)
+  assert.match(dashboard, /每年 1～3 月判斷上一年度 4Q／年報是否公布/)
+  assert.match(dashboard, /Annual_Report_Target_Quarter/)
+  assert.doesNotMatch(dashboard, /已過3\/31但財報未見，強制估算/)
+})

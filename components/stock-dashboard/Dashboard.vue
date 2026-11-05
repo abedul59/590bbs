@@ -100,7 +100,7 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-rev">營收</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-net">淨利</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-six">六大指標</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-q4">Q4 檢查</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-q4">年初 Q4／年報檢查</button></li>
           </ul>
 
           <div class="tab-content" id="stockTabsContent">
@@ -293,7 +293,12 @@
             </div>
 
             <div class="tab-pane fade" id="tab-q4">
-              <div class="row"><div class="col-md-8 mx-auto">
+              <div v-if="!annualReportCheckActive" class="alert alert-secondary text-center mx-auto" style="max-width: 866px;">
+                <strong>目前非年初年報檢查期間。</strong><br>
+                本功能只在每年 1～3 月判斷上一年度 4Q／年報是否公布；4～12 月不再估算去年 Q4。<br>
+                <small>{{ perData.Detect_Reason || '' }}</small>
+              </div>
+              <div v-else class="row"><div class="col-md-8 mx-auto">
                 <table class="table table-bordered table-hover text-center">
                   <thead class="table-dark"><tr><th>項目</th><th>數值 / 狀態</th></tr></thead>
                   <tbody>
@@ -303,7 +308,7 @@
                   </tbody>
                 </table>
               </div></div>
-	              <CalculationAudit :items="q4AuditRows" />
+	              <CalculationAudit v-if="annualReportCheckActive" :items="q4AuditRows" />
             </div>
 
           </div>
@@ -782,12 +787,23 @@ const yoyRows = computed(() => (perData.value.YoY_Names || []).map((name, i) => 
 // 4. 淨利 Table
 const netRows = computed(() => (perData.value.Net_Names || []).map((name, i) => ({ name, val: perData.value.Net_Vals[i] })))
 
-// 5. Q4 檢查 Table (套用動態季別名稱修正)
+// 5. Q4／年報檢查：只在 1～3 月判斷上一年度年報是否公布。
+const annualReportCheckActive = computed(() => {
+  const explicit = perData.value.Annual_Report_Check_Active
+  if (typeof explicit === 'boolean') return explicit
+  const queryDate = String(perData.value.Date || metaData.value.QueryDate || '')
+  const month = Number(queryDate.split('-')[1] || 0)
+  return month >= 1 && month <= 3
+})
+
 const q4Rows = computed(() => {
   const per = perData.value
   const q1 = per.EPS_Q1 || 0, q2 = per.EPS_Q2 || 0, q3 = per.EPS_Q3 || 0
+  const targetYear = Number(per.Annual_Report_Target_Year || (Number(per.Current_Year || forecastYear.value) - 1))
+  const targetYearRoc = Number(per.Annual_Report_Target_Year_ROC || (targetYear - 1911))
   return [
     { label: "狀態", val: per.Detect_Reason || '-' },
+    { label: "檢查目標", val: `${targetYear}/${targetYearRoc} 年 4Q／年報` },
     { label: "網頁最新季別", val: per.Latest_Quarter_Str || '-' },
     { label: `${per.epsq1N || '最新季'} EPS (實際)`, val: q1 },
     { label: `${per.epsq2N || '前一季'} EPS (實際)`, val: q2 },
@@ -799,12 +815,7 @@ const q4Rows = computed(() => {
     { label: "股本(億)", val: per.Capital || 0 },
     { label: "Q4 EPS (估算)", val: per.Q4_EPS_Est || 0 },
     { label: "---", val: "---" },
-    { label: "最近全年 EPS (估/實)", val: per.Total_EPS_Est || 0 },
-    { label: "---", val: "---" },
-    { label: "估值年度", val: `${forecastYear.value}/${forecastYearRoc.value}` },
-    { label: `${forecastYear.value} 預估營收`, val: forwardValuation.value.revenue || 0 },
-    { label: `${forecastYear.value} 預估 EPS`, val: forwardValuation.value.eps },
-    { label: "預估方法", val: per.Forecast_Method || "預估營收 × 平均淨利率 ÷ 股本 × 10" }
+    { label: `${targetYear} 全年 EPS (估/實)`, val: per.Total_EPS_Est || 0 }
   ]
 })
 
@@ -938,8 +949,9 @@ const sixAuditRows = computed(() => {
 
 const q4AuditRows = computed(() => {
   const per = perData.value
+  if (!annualReportCheckActive.value) return []
   const qSum = Number(per.EPS_Q1 || 0) + Number(per.EPS_Q2 || 0) + Number(per.EPS_Q3 || 0)
-  const usesEstimate = per.Use_Estimation !== false
+  const usesEstimate = per.Use_Estimation === true
   return [
     {
       label: '去年 Q4 營收', formula: '10 月營收＋11 月營收＋12 月營收',
@@ -959,7 +971,8 @@ const q4AuditRows = computed(() => {
     },
     {
       label: '年報判定', formula: '若來源已出現去年 4Q，採實際全年 EPS；否則估算 Q4',
-      substitution: `最新季別：${per.Latest_Quarter_Str || '-'}`, result: usesEstimate ? '使用估算' : '使用實際值',
+      substitution: `完整季別清單中搜尋 ${per.Annual_Report_Target_Quarter || '去年 4Q'}；最新季別：${per.Latest_Quarter_Str || '-'}`,
+      result: usesEstimate ? '年報未公布，使用估算' : '年報已公布，使用實際值',
       sources: [source('季度損益表', sourceUrls.value.quarterlyEps)]
     }
   ]

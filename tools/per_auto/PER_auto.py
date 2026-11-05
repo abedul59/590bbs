@@ -299,6 +299,35 @@ def calculate_valuation_band(eps, pe_high, pe_low):
         'pe_low': low_multiple if low_price > 0 else 0,
     }
 
+def assess_annual_report_status(current_year, current_month, quarter_names):
+    """Q4／年報檢查只在 1～3 月進行，並搜尋整份季度清單。"""
+    target_year = int(current_year) - 1
+    target_quarter = f"{target_year}.4Q"
+    names = [str(name).strip() for name in (quarter_names or []) if str(name).strip()]
+    latest_quarter = names[0] if names else "未偵測"
+    check_active = 1 <= int(current_month) <= 3
+    found = any(target_quarter in name for name in names)
+
+    if not check_active:
+        reason = f"目前非年初年報檢查期間；{target_year} 年 4Q／年報不再進行估算。"
+        use_estimation = False
+    elif found:
+        reason = f"財報已發現 [{target_quarter}]，採用實際全年 EPS。"
+        use_estimation = False
+    else:
+        reason = f"目前為 1～3 月且尚未發現 [{target_quarter}]，估算去年 Q4 EPS。"
+        use_estimation = True
+
+    return {
+        'active': check_active,
+        'target_year': target_year,
+        'target_quarter': target_quarter,
+        'latest_quarter': latest_quarter,
+        'found': found,
+        'use_estimation': use_estimation,
+        'reason': reason,
+    }
+
 def get_stock_name_robust(stock_id):
     """強化版：多重備援機制抓取股票名稱"""
     stock_str = str(stock_id)
@@ -512,9 +541,6 @@ def PERsegx(stock_id, month_id, six_data):
     forecast_year_roc = forecast_year_ad - 1911
     forecast_next_year = forecast_year_ad > current_year_ad
 
-    deadline_date = datetime.datetime(current_year_ad, 3, 31)
-    is_before_deadline = now < deadline_date
-
     H0=H1=H2=H3=H4=H5=H6=0.0; L0=L1=L2=L3=L4=L5=L6=0.0
     eps1=eps2=eps3=eps4=eps5=0.0; eps1N = "Unknown"
     xEPSList = []
@@ -522,25 +548,23 @@ def PERsegx(stock_id, month_id, six_data):
     PER_H1=PER_L1=PER_H2=PER_L2=PER_H3=PER_L3=PER_H4=PER_L4=PER_H5=PER_L5=0
     PER_H_average=PER_L_average=PER_H=PER_L=0
 
-    use_estimation = True; detect_reason = "初始化"
+    use_estimation = False; detect_reason = "初始化"
     found_4Q_text = False; latest_quarter_str = "未偵測"
+    annual_report_check_active = now.month <= 3
 
     stock_name = get_stock_name_robust(stock_id)
 
-    # 1. 檢查財報狀態 (結合六大指標 EPS 最新季別進行確認)
+    # 1. 年初才檢查上一年度 4Q／年報；搜尋整份季別清單，不只看最新一筆。
+    quarter_names = []
     try:
-        if len(six_data['EPS']['Data']) > 0:
-            latest_quarter_str = six_data['EPS']['Data'][0]['Name']
-            if f"{last_year_ad}.4Q" in latest_quarter_str:
-                found_4Q_text = True
+        quarter_names = [row.get('Name', '') for row in six_data['EPS']['Data']]
     except: pass
-
-    if found_4Q_text:
-        use_estimation = False; detect_reason = f"財報已發現 [{last_year_ad}.4Q]，採用實際值。"
-    elif not is_before_deadline:
-        use_estimation = True; detect_reason = "已過3/31但財報未見，強制估算。"
-    else:
-        use_estimation = True; detect_reason = "目前為3/31前，年報未公佈，採用估算。"
+    annual_status = assess_annual_report_status(current_year_ad, now.month, quarter_names)
+    annual_report_check_active = annual_status['active']
+    latest_quarter_str = annual_status['latest_quarter']
+    found_4Q_text = annual_status['found']
+    use_estimation = annual_status['use_estimation']
+    detect_reason = annual_status['reason']
 
     # 2. 抓取股價 (TSE/OTC)
     if stock_id in TSEAll:  # 上市
@@ -663,8 +687,9 @@ def PERsegx(stock_id, month_id, six_data):
             if len(xqEPSList) > 3: epsq3 = safe_eps(xqEPSList[3])
     except: pass
 
-    # 若 4Q 已出，強制把 eps1 替換為最新四季 EPS 加總 (確保數據最準確)
-    if not use_estimation and found_4Q_text:
+    # 只在年初檢查期間且上一年度 4Q 已出時，以四季實際 EPS 加總替換全年值。
+    # 4 月後的最新四季可能跨兩個年度，不可誤標成上一年度全年 EPS。
+    if annual_report_check_active and not use_estimation and found_4Q_text:
         try:
             eps_data = six_data['EPS']['Data']
             if len(eps_data) >= 4:
@@ -840,7 +865,13 @@ def PERsegx(stock_id, month_id, six_data):
         'eps1N': eps1N, 'EPS_Q1': epsq1, 'EPS_Q2': epsq2, 'EPS_Q3': epsq3,
         'epsq1N': epsq1N, 'epsq2N': epsq2N, 'epsq3N': epsq3N, # 輸出動態季別名稱
         'Q4_Rev_Actual': Q4_Rev_Actual, 'Q4_EPS_Est': Q4_EPS_Predict, 'Total_EPS_Est': Total_EPS_Predict,
-        'Detect_Reason': detect_reason, 'Use_Estimation': use_estimation, 'Latest_Quarter_Str': latest_quarter_str, 'Is_Before_Deadline': is_before_deadline,
+        'Detect_Reason': detect_reason, 'Use_Estimation': use_estimation, 'Latest_Quarter_Str': latest_quarter_str,
+        'Is_Before_Deadline': annual_report_check_active,
+        'Annual_Report_Check_Active': annual_report_check_active,
+        'Annual_Report_Target_Year': annual_status['target_year'],
+        'Annual_Report_Target_Year_ROC': annual_status['target_year'] - 1911,
+        'Annual_Report_Target_Quarter': annual_status['target_quarter'],
+        'Annual_Report_Found': found_4Q_text,
         'Date': now.strftime("%Y-%m-%d"), 'EPS1_Is_Est': use_estimation,
         'Sources': sources,
         'Formulas': {
