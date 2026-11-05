@@ -36,7 +36,16 @@ jobs:
         run: python -m unittest tools/all-in-one/test_all_in_one.py
       - name: Test MacroWave worker
         working-directory: tools/macrowave_autosync
-        run: python -m unittest tests/test_autosync.py
+        shell: pwsh
+        run: |
+          $testOutput = & python -m unittest tests/test_autosync.py 2>&1
+          $testExitCode = $LASTEXITCODE
+          $testOutput | Write-Output
+          if ($testExitCode -ne 0) {
+            $annotation = ($testOutput -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+            Write-Output "::error title=MacroWave Windows tests::$annotation"
+            exit $testExitCode
+          }
       - name: Test PER worker
         run: python -m unittest tools/per_auto/test_per_auto.py
       - name: Test stock tracker worker
