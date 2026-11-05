@@ -34,15 +34,15 @@ jobs:
         run: python -m pip install -r tools/all-in-one/requirements.txt pyinstaller==6.18.0
       - name: Run unified controller tests
         run: python -m unittest tools/all-in-one/test_all_in_one.py
-      - name: Run existing tool tests
-        shell: pwsh
-        run: |
-          Push-Location tools/macrowave_autosync
-          python -m unittest tests/test_autosync.py
-          Pop-Location
-          python -m unittest tools/per_auto/test_per_auto.py
-          python -m unittest tools/twstocktracker/test_stock_tracker.py
-          python -m unittest tools/bengo-auto/test_bengo_auto.py
+      - name: Test MacroWave worker
+        working-directory: tools/macrowave_autosync
+        run: python -m unittest tests/test_autosync.py
+      - name: Test PER worker
+        run: python -m unittest tools/per_auto/test_per_auto.py
+      - name: Test stock tracker worker
+        run: python -m unittest tools/twstocktracker/test_stock_tracker.py
+      - name: Test Bengo worker
+        run: python -m unittest tools/bengo-auto/test_bengo_auto.py
       - name: Build single GUI executable
         shell: pwsh
         run: |
