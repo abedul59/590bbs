@@ -285,6 +285,20 @@ def calculate_eps_forecast(revenue, net_margin, capital_stock):
         return 0.0
     return round(clean_float(revenue) * float(net_margin) / capital * 10, 2)
 
+def calculate_valuation_band(eps, pe_high, pe_low):
+    """用同一組 EPS 與採用 PE 計算預估高低價，並保留可稽核的預估 PE。"""
+    eps_value = clean_float(eps)
+    high_multiple = clean_float(pe_high)
+    low_multiple = clean_float(pe_low)
+    high_price = round(eps_value * high_multiple, 2) if eps_value > 0 and high_multiple > 0 else 0
+    low_price = round(eps_value * low_multiple, 2) if eps_value > 0 and low_multiple > 0 else 0
+    return {
+        'high_price': high_price,
+        'low_price': low_price,
+        'pe_high': high_multiple if high_price > 0 else 0,
+        'pe_low': low_multiple if low_price > 0 else 0,
+    }
+
 def get_stock_name_robust(stock_id):
     """強化版：多重備援機制抓取股票名稱"""
     stock_str = str(stock_id)
@@ -774,6 +788,7 @@ def PERsegx(stock_id, month_id, six_data):
         current_year_eps_estimate = fallback_current_year_eps
     current_year_pe_high = round(H0 / current_year_eps_estimate, 2) if H0 > 0 and current_year_eps_estimate > 0 else 0
     current_year_pe_low = round(L0 / current_year_eps_estimate, 2) if L0 > 0 and current_year_eps_estimate > 0 else 0
+    current_year_valuation = calculate_valuation_band(current_year_eps_estimate, PER_H, PER_L)
 
     # Predict_Rev、Predict_Net、Predict_EPS 必須屬於相同的 forecast_year。
     # 例如 2026 年 9 月後：先補齊 2026 營收，再外推 2027 營收與 EPS。
@@ -783,8 +798,9 @@ def PERsegx(stock_id, month_id, six_data):
         if forecast_next_year:
             Predict_EPS = round(Predict_EPS * (1 + RevYoY), 2)
 
-    Predict_high_price = round(Predict_EPS * PER_H, 2) if PER_H > 0 else 0
-    Predict_low_price = round(Predict_EPS * PER_L, 2) if PER_L > 0 else 0
+    forecast_valuation = calculate_valuation_band(Predict_EPS, PER_H, PER_L)
+    Predict_high_price = forecast_valuation['high_price']
+    Predict_low_price = forecast_valuation['low_price']
 
     yahoo_latest_tradePrice = get_latest_price(stock_id)
 
@@ -806,11 +822,18 @@ def PERsegx(stock_id, month_id, six_data):
         'Forecast_Base_Year': current_year_ad, 'Forecast_Base_Revenue': Rev_Current_Year_Est,
         'Forecast_Horizon': 'next_year' if forecast_next_year else 'current_year',
         'Forecast_Method': '預估營收 × 平均淨利率 ÷ 股本 × 10',
+        'Forecast_PE_H': forecast_valuation['pe_high'], 'Forecast_PE_L': forecast_valuation['pe_low'],
         'Target_H': Predict_high_price, 'Target_L': Predict_low_price,
         'Target_H_30': round(Predict_high_price*0.7, 2), 'Target_L_30': round(Predict_low_price*0.7, 2),
         'Now_Price': yahoo_latest_tradePrice, 'H0': H0, 'L0': L0, 'Profit': New_up_profit, 'Risk': New_down_loss, 'RR': risk_reward,
         'Current_Year_H': H0, 'Current_Year_L': L0, 'Current_Year_EPS_Est': current_year_eps_estimate,
         'Current_Year_PE_H': current_year_pe_high, 'Current_Year_PE_L': current_year_pe_low,
+        'Current_Year_H_Est': current_year_valuation['high_price'],
+        'Current_Year_L_Est': current_year_valuation['low_price'],
+        'Current_Year_PE_H_Est': current_year_valuation['pe_high'],
+        'Current_Year_PE_L_Est': current_year_valuation['pe_low'],
+        'Current_Year_Valuation_Is_Estimate': forecast_next_year,
+        'Current_Year_Valuation_Method': '當年度預估 EPS × 採用歷史 PE',
         'Profit_30': f"{(round(Predict_high_price*0.7, 2)-yahoo_latest_tradePrice)/yahoo_latest_tradePrice*100:.2f}%" if yahoo_latest_tradePrice else "0%",
         'Risk_30': f"{(round(Predict_low_price*0.7, 2)-yahoo_latest_tradePrice)/yahoo_latest_tradePrice*100:.2f}%" if yahoo_latest_tradePrice else "0%",
         'RR_30': 0, 'Current_Year': current_year_ad, 'Current_Year_ROC': current_year_roc,
@@ -826,6 +849,8 @@ def PERsegx(stock_id, month_id, six_data):
             'ForecastRevenue': '完整年度基期營收×(1＋採用 YoY)',
             'ForecastEPS': '預估營收×近四季平均淨利率÷股本×10',
             'HistoricalPE': '年度最高／最低價÷該年度 EPS',
+            'CurrentYearEstimatedPrice': '當年度預估 EPS×採用歷史 PE',
+            'EstimatedPE': '預估最高／最低價÷同年度預估 EPS（等於採用歷史 PE）',
             'TargetPrice': '預估 EPS×採用歷史 PE',
         },
     }
@@ -866,6 +891,12 @@ def process_stock(stock_id, target_month):
     print(f"  - 抓取季報: {q1n}={per['EPS_Q1']}, {q2n}={per['EPS_Q2']}, {q3n}={per['EPS_Q3']}")
     if not per['Use_Estimation']:
         print(f"  - 年報已出！最近年度 EPS={per['Total_EPS_Est']}")
+    if per['Forecast_Horizon'] == 'next_year':
+        print(
+            f"  - {per['Current_Year']} 年預估：EPS={per['Current_Year_EPS_Est']}，"
+            f"預估價={per['Current_Year_L_Est']}～{per['Current_Year_H_Est']}，"
+            f"預估 PE={per['Current_Year_PE_L_Est']}～{per['Current_Year_PE_H_Est']}"
+        )
     print(
         f"  - {per['Forecast_Year']} 年預估：營收={per['Predict_Rev']} 億，"
         f"EPS={per['Predict_EPS']}，目標價={per['Target_L']}～{per['Target_H']}"

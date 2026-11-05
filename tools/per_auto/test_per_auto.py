@@ -31,6 +31,16 @@ class PerAutoTests(unittest.TestCase):
     def test_eps_uses_same_year_revenue_margin_and_capital(self):
         self.assertEqual(per_auto.calculate_eps_forecast(134.2, 0.12, 30), 5.37)
 
+    def test_valuation_band_includes_estimated_prices_and_pe(self):
+        valuation = per_auto.calculate_valuation_band(98.56, 29.46, 17.24)
+
+        self.assertEqual(valuation, {
+            'high_price': 2903.58,
+            'low_price': 1699.17,
+            'pe_high': 29.46,
+            'pe_low': 17.24,
+        })
+
     def test_2330_like_data_scores_all_six_indicators(self):
         ratings = [
             per_auto.rate_revenue([54.65, 53.32, 44.69, 67.87, 30.09, 17.50])[0],

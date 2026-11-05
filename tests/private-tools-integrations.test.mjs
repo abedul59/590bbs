@@ -72,3 +72,13 @@ test('imported tools use namespaced APIs and portable database fallbacks', async
   assert.match(trackerTrigger, /macrowave_dashboard_data/)
   assert.match(moneydamTrigger, /macrowave_dashboard_data/)
 })
+
+test('stock valuation shows current and forward estimated price and PE bands', async () => {
+  const dashboard = await read('components/stock-dashboard/Dashboard.vue')
+
+  assert.match(dashboard, /forwardValuation\.peH/)
+  assert.match(dashboard, /Current_Year_H_Est/)
+  assert.match(dashboard, /Current_Year_PE_H_Est/)
+  assert.match(dashboard, /當年度預估最高／最低價/)
+  assert.match(dashboard, /當年度預估本益比/)
+})

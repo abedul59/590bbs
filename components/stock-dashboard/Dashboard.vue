@@ -223,7 +223,8 @@
                     <tr class="table-warning fw-bold">
                       <td>{{ forecastYear }}/{{ forecastYearRoc }}(預估)</td>
                       <td class="text-danger">{{ forwardValuation.targetH }}</td><td class="text-success">{{ forwardValuation.targetL }}</td>
-                      <td class="text-primary">{{ forwardValuation.eps }}</td><td>-</td><td>-</td>
+                      <td class="text-primary">{{ forwardValuation.eps }}</td>
+                      <td>{{ forwardValuation.peH || '-' }}</td><td>{{ forwardValuation.peL || '-' }}</td>
                     </tr>
                     <tr v-for="(row, index) in histRows" :key="index">
                       <td>{{ row.year_str }} <span v-if="row.is_estimate">(預)</span></td>
@@ -536,6 +537,8 @@ const forwardValuation = computed(() => {
     currentRevenue: Number(currentRevenue.toFixed(4)),
     targetH,
     targetL,
+    peH: Number(per.Forecast_PE_H || peH || 0),
+    peL: Number(per.Forecast_PE_L || peL || 0),
     profit: price > 0 ? `${(((targetH - price) / price) * 100).toFixed(2)}%` : (per.Profit || '0%')
   }
 })
@@ -727,10 +730,11 @@ const histRows = computed(() => {
   const cYear = Number(per.Current_Year || new Date().getFullYear())
   const cYearRoc = per.Current_Year_ROC || (cYear - 1911)
 
-  const currentHigh = Number(per.Current_Year_H || per.H0 || 0)
-  const currentLow = Number(per.Current_Year_L || per.L0 || 0)
+  const actualCurrentHigh = Number(per.Current_Year_H || per.H0 || 0)
+  const actualCurrentLow = Number(per.Current_Year_L || per.L0 || 0)
   let currentEps = Number(per.Current_Year_EPS_Est || 0)
-  if (currentEps <= 0 && forecastYear.value > cYear) {
+  const afterSeptemberCutover = forecastYear.value > cYear
+  if (currentEps <= 0 && afterSeptemberCutover) {
     const growth = parsePct(per.YoY_Use)
     const forecastRevenue = Number(forwardValuation.value.revenue || 0)
     const currentRevenue = Number(forwardValuation.value.currentRevenue || per.Forecast_Base_Revenue || 0) || (1 + growth !== 0 ? forecastRevenue / (1 + growth) : 0)
@@ -740,14 +744,28 @@ const histRows = computed(() => {
       currentEps = Number(((currentRevenue * margin / capital) * 10).toFixed(2))
     }
   }
+  const adoptedPeHigh = Number(per.Current_Year_PE_H_Est || per.PE_Use_H || 0)
+  const adoptedPeLow = Number(per.Current_Year_PE_L_Est || per.PE_Use_L || 0)
+  const estimatedCurrentHigh = Number(per.Current_Year_H_Est || 0) ||
+    (currentEps > 0 && adoptedPeHigh > 0 ? Number((currentEps * adoptedPeHigh).toFixed(2)) : 0)
+  const estimatedCurrentLow = Number(per.Current_Year_L_Est || 0) ||
+    (currentEps > 0 && adoptedPeLow > 0 ? Number((currentEps * adoptedPeLow).toFixed(2)) : 0)
+  const currentHigh = afterSeptemberCutover ? estimatedCurrentHigh : actualCurrentHigh
+  const currentLow = afterSeptemberCutover ? estimatedCurrentLow : actualCurrentLow
+  const currentPeHigh = afterSeptemberCutover
+    ? adoptedPeHigh
+    : Number(per.Current_Year_PE_H || (currentHigh > 0 && currentEps > 0 ? currentHigh / currentEps : 0))
+  const currentPeLow = afterSeptemberCutover
+    ? adoptedPeLow
+    : Number(per.Current_Year_PE_L || (currentLow > 0 && currentEps > 0 ? currentLow / currentEps : 0))
   if (currentHigh > 0 || currentLow > 0 || currentEps > 0) {
     rows.push({
       year_str: `${cYear}/${cYearRoc}`,
       h: currentHigh || '-',
       l: currentLow || '-',
       eps: currentEps || '-',
-      pe_h: currentHigh > 0 && currentEps > 0 ? (currentHigh / currentEps).toFixed(2) : '-',
-      pe_l: currentLow > 0 && currentEps > 0 ? (currentLow / currentEps).toFixed(2) : '-',
+      pe_h: currentPeHigh > 0 ? currentPeHigh.toFixed(2) : '-',
+      pe_l: currentPeLow > 0 ? currentPeLow.toFixed(2) : '-',
       is_estimate: true
     })
   }
@@ -811,11 +829,18 @@ const historyAuditRows = computed(() => {
       sources: [source('月營收', sourceUrls.value.Rev), source('財務比率', sourceUrls.value.Op), source('股本資料', sourceUrls.value.capital)]
     },
     {
-      label: '當年度本益比',
-      formula: 'PE 高＝當年最高價÷當年 EPS；PE 低＝當年最低價÷當年 EPS',
+      label: '當年度預估最高／最低價',
+      formula: '預估最高價＝當年度預估 EPS×採用 PE 高；預估最低價＝當年度預估 EPS×採用 PE 低',
+      substitution: `${current.eps || '-'} × ${per.PE_Use_H || '-'}；${current.eps || '-'} × ${per.PE_Use_L || '-'}`,
+      result: `高 ${current.h || '-'}／低 ${current.l || '-'}`,
+      sources: [source('年度行情', sourceUrls.value.twse), source('歷年 EPS', sourceUrls.value.annualEps)]
+    },
+    {
+      label: '當年度預估本益比',
+      formula: '預估 PE 高＝預估最高價÷預估 EPS；預估 PE 低＝預估最低價÷預估 EPS',
       substitution: `${current.h || '-'} ÷ ${current.eps || '-'}；${current.l || '-'} ÷ ${current.eps || '-'}`,
       result: `高 ${current.pe_h || '-'}／低 ${current.pe_l || '-'}`,
-      sources: [source('上市年度行情', sourceUrls.value.twse), source('上櫃年度行情查詢', sourceUrls.value.tpex)]
+      sources: [source('年度行情', sourceUrls.value.twse), source('歷年 EPS', sourceUrls.value.annualEps)]
     },
     {
       label: '採用歷史 PE',
