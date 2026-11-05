@@ -5,6 +5,8 @@ import sys
 import time
 import random
 import re
+import shutil
+import tempfile
 import traceback
 import webbrowser
 from datetime import datetime
@@ -26,6 +28,9 @@ DEFAULT_SETTINGS = {
     "headless": True,
     "minimum_wait_seconds": 40,
     "maximum_wait_seconds": 120,
+    "browser_start_attempts": 3,
+    "browser_start_retry_seconds": 5,
+    "stock_retry_attempts": 2,
     "open_dashboard_when_finished": False,
 }
 
@@ -49,6 +54,9 @@ def load_settings(filename="bengo_settings.json"):
         print(f"⚠️ 設定檔讀取失敗，改用預設值：{exc}")
     settings["minimum_wait_seconds"] = max(0, int(settings["minimum_wait_seconds"]))
     settings["maximum_wait_seconds"] = max(settings["minimum_wait_seconds"], int(settings["maximum_wait_seconds"]))
+    settings["browser_start_attempts"] = max(1, int(settings["browser_start_attempts"]))
+    settings["browser_start_retry_seconds"] = max(0, int(settings["browser_start_retry_seconds"]))
+    settings["stock_retry_attempts"] = max(1, int(settings["stock_retry_attempts"]))
     return settings
 
 
@@ -86,7 +94,7 @@ def read_stock_ids(filename="stock_id_settings.csv"):
             f.write("2330\n2317\n2603\n")
         print(f"👉 已自動為您建立範例 '{filename}'，請填入股票代號後重新執行。")
         return []
-        
+
     with open(filename, 'r', encoding='utf-8-sig') as f:
         for line in f:
             sid = line.strip().split(',')[0].strip()
@@ -125,10 +133,10 @@ class BengoScraper:
             my_Referer = 'https://djinfo.cathaysec.com.tw/'
             headers = {'Referer': my_Referer}
 
-            bank_url = 'https://djinfo.cathaysec.com.tw/' 
-            sheet_type = 'z/zc/zca/zca_' 
+            bank_url = 'https://djinfo.cathaysec.com.tw/'
+            sheet_type = 'z/zc/zca/zca_'
             url = bank_url + sheet_type + stock_id + '.djhtm'
-            
+
             response = self.session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -147,20 +155,65 @@ class BengoScraper:
             print(f"  -> ⚠️ MoneyDJ 抓取名稱失敗: {e}")
             return ""
 
+    def _chrome_options(self, profile_dir):
+        options = Options()
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-background-networking")
+        options.add_argument("--remote-debugging-pipe")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--log-level=3")
+        options.add_argument(f"--user-data-dir={profile_dir}")
+        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+        if self.settings.get("headless", True):
+            options.add_argument("--headless=new")
+        return options
+
+    def start_chrome(self):
+        """以獨立設定檔啟動 Chrome，處理 Windows 偶發的 chrome not reachable。"""
+        attempts = max(1, int(self.settings.get("browser_start_attempts", 3)))
+        retry_seconds = max(0, int(self.settings.get("browser_start_retry_seconds", 5)))
+        last_error = None
+
+        for attempt in range(1, attempts + 1):
+            profile_dir = tempfile.mkdtemp(prefix="bengo_chrome_")
+            try:
+                driver = webdriver.Chrome(
+                    service=Service(),
+                    options=self._chrome_options(profile_dir),
+                )
+                if attempt > 1:
+                    print(f"  -> ✅ Chrome 第 {attempt} 次啟動成功。")
+                return driver, profile_dir
+            except Exception as exc:
+                last_error = exc
+                shutil.rmtree(profile_dir, ignore_errors=True)
+                if attempt < attempts:
+                    print(
+                        f"  -> ⚠️ Chrome 第 {attempt}/{attempts} 次啟動失敗：{exc.__class__.__name__}；"
+                        f"{retry_seconds} 秒後使用全新設定檔重試。"
+                    )
+                    if retry_seconds:
+                        time.sleep(retry_seconds)
+
+        raise RuntimeError(f"Chrome 連續 {attempts} 次啟動失敗") from last_error
+
     def parse_main_history(self, element):
         rows = element.find_elements(By.TAG_NAME, "tr")
         data = []
         for row in rows:
             cols = row.find_elements(By.TAG_NAME, "td")
             if len(cols) < 5: continue
-            
+
             date_idx = -1
             date_str = ""
             for i in range(min(5, len(cols))):
                 txt = cols[i].text.strip()
                 match = re.search(r'(\d{8})', txt)
                 if match: date_idx = i; date_str = match.group(1); break
-            
+
             if date_idx == -1: continue
             def get_val(offset): return cols[date_idx + offset].text.strip() if (date_idx + offset) < len(cols) else "0"
             try:
@@ -170,7 +223,7 @@ class BengoScraper:
                     'date': date_str,
                     'price': price,
                     'total_shares': self.clean_num(get_val(1)),
-                    'total_people': int(self.clean_num(get_val(2))), 
+                    'total_people': int(self.clean_num(get_val(2))),
                     'raw_400_ppl': int(self.clean_num(get_val(6))),
                     'raw_400_pct': self.clean_num(get_val(5))
                 })
@@ -191,16 +244,16 @@ class BengoScraper:
                     match = re.search(r'(\d{8})', txt)
                     if match: date_list.append(match.group(1))
                 if date_list: break
-            
+
             if not date_list: return {}
-            
+
             temp_data = {d: [] for d in date_list}
             for row in rows:
                 cells = row.find_all(['td', 'th'])
                 if not cells: continue
                 name = cells[0].get_text(strip=True)
                 if not any(c.isdigit() for c in name) or "合計" in name: continue
-                if "*" in name: continue 
+                if "*" in name: continue
 
                 data_cells = cells[1:]
                 for i, date_str in enumerate(date_list):
@@ -217,7 +270,7 @@ class BengoScraper:
         try:
             rows = soup_table.find_all('tr')
             if not rows: return {}
-            
+
             range_list = []
             for r in rows:
                 txt = r.get_text()
@@ -232,14 +285,14 @@ class BengoScraper:
                             if nums: lower = int(nums[0])
                         if lower != -1: range_list.append({'lower': lower})
                     break
-            
+
             if not range_list: return {}
 
             result = {}
             for row in rows:
                 cells = row.find_all(['td', 'th'])
                 if len(cells) < 5: continue
-                
+
                 date_str = ""
                 date_idx = -1
                 for i, cell in enumerate(cells):
@@ -247,9 +300,9 @@ class BengoScraper:
                     match = re.search(r'(\d{8})', t)
                     if match:
                         date_str = match.group(1); date_idx = i; break
-                
+
                 if date_idx == -1: continue
-                
+
                 data_start = date_idx + 1
                 row_data = []
                 for i, r_info in enumerate(range_list):
@@ -257,7 +310,7 @@ class BengoScraper:
                     if idx < len(cells):
                         pct = self.clean_num(cells[idx].get_text())
                         row_data.append({'lower': r_info['lower'], 'pct': pct})
-                
+
                 if row_data: result[date_str] = row_data
             return result
         except (AttributeError, IndexError, TypeError, ValueError):
@@ -269,10 +322,10 @@ class BengoScraper:
             total_s += item['shares']
             lower = 0
             nums = re.findall(r'\d+', item['range'].replace(',', ''))
-            if nums: 
+            if nums:
                 val = int(nums[0])
                 if "股" in item['range']: lower = 0
-                else: lower = 1 if val==1 else val 
+                else: lower = 1 if val==1 else val
 
             if lower >= threshold:
                 ppl += item['ppl']; shares += item['shares']
@@ -289,6 +342,7 @@ class BengoScraper:
 
     def scrape_stock_data(self, stock_id):
         driver = None
+        profile_dir = None
         current_stock_name = ""
         final_data = []
 
@@ -299,28 +353,20 @@ class BengoScraper:
                 current_stock_name = f"股票_{stock_id}"
 
             print(f"  -> 正在初始化瀏覽器... [{current_stock_name}]")
-            chrome_options = Options()
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--log-level=3")
-            chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-            if self.settings.get("headless", True):
-                chrome_options.add_argument("--headless=new")
-
-            # Selenium Manager 會自動尋找與 Chrome 相容的驅動程式。
-            driver = webdriver.Chrome(service=Service(), options=chrome_options)
+            # Selenium Manager 會自動尋找相容驅動；每次使用獨立設定檔避免前一個
+            # Chrome 工作尚未完全釋放時造成 session not created。
+            driver, profile_dir = self.start_chrome()
             wait = WebDriverWait(driver, 20)
-            
+
             # === 1. 主表 ===
             print("  -> Step 1/4: 抓取主歷史表...")
             driver.get(f"https://norway.twsthr.info/StockHolders.aspx?Stock={stock_id}")
             wait.until(EC.presence_of_element_located((By.ID, "Details")))
-            
+
             main_history = self.parse_main_history(driver.find_element(By.ID, "Details"))
             if not main_history:
                 raise ValueError("主歷史表沒有解析到有效資料，網站欄位可能已更新")
-            
+
             # === 2. 前期比較 ===
             print("  -> Step 2/4: 抓取前期比較...")
             prior_data_map = {}
@@ -329,10 +375,10 @@ class BengoScraper:
                 driver.execute_script("arguments[0].click();", tab_btn)
                 wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='D2']//td[contains(text(), '1-999')]")))
                 time.sleep(1)
-                
+
                 d2_html = driver.find_element(By.ID, "D2").get_attribute('outerHTML')
                 soup = BeautifulSoup(d2_html, 'html.parser')
-                
+
                 for tbl in soup.find_all('table'):
                     txt = tbl.get_text()
                     if "1-999" in txt and "400-600" in txt:
@@ -349,10 +395,10 @@ class BengoScraper:
                 driver.execute_script("arguments[0].click();", tab_btn)
                 wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='D3']//*[contains(text(), '小於') or contains(text(), '1~5')]")))
                 time.sleep(1.5)
-                
+
                 d3_html = driver.find_element(By.ID, "D3").get_attribute('outerHTML')
                 soup = BeautifulSoup(d3_html, 'html.parser')
-                
+
                 for tbl in soup.find_all('table'):
                     txt = tbl.get_text()
                     if "小於" in txt and "1~5" in txt:
@@ -367,11 +413,11 @@ class BengoScraper:
                 date_str = row['date']
                 price = row['price']
                 threshold = self.calculate_bengo_threshold(price)
-                
+
                 major_ppl = row['raw_400_ppl']
                 major_pct = row['raw_400_pct']
                 note = ""
-                
+
                 if threshold < 400:
                     if date_str in prior_data_map:
                         stats = self.calc_from_prior(prior_data_map[date_str], threshold)
@@ -403,8 +449,13 @@ class BengoScraper:
             print(traceback.format_exc())
         finally:
             if driver:
-                driver.quit()
+                try:
+                    driver.quit()
+                except Exception as exc:
+                    print(f"  -> ⚠️ 關閉瀏覽器時發生非致命錯誤: {exc}")
                 print("  -> 瀏覽器已關閉。")
+            if profile_dir:
+                shutil.rmtree(profile_dir, ignore_errors=True)
 
         return current_stock_name, final_data
 
@@ -490,14 +541,14 @@ def main():
     print("=======================================")
     print(f"目前網站: {DASHBOARD_URL}")
     print(f"同步 API: {UPLOAD_API_URL}\n")
-    
+
     stock_ids = read_stock_ids()
     if not stock_ids:
         return 2
-        
+
     total_stocks = len(stock_ids)
     print(f"共讀取到 {total_stocks} 檔股票準備處理。\n")
-    
+
     session = create_http_session()
     scraper = BengoScraper(settings=settings, session=session)
     succeeded = 0
@@ -506,23 +557,37 @@ def main():
     for index, stock_id in enumerate(stock_ids):
         current_step = index + 1
         print(f"\n[{current_step}/{total_stocks}] 開始處理股票代號: {stock_id}")
-        
+
         try:
-            stock_name, history_data = scraper.scrape_stock_data(stock_id)
-            
-            if history_data and len(history_data) > 0:
+            stock_name = ""
+            history_data = []
+            stock_attempts = max(1, int(settings.get("stock_retry_attempts", 2)))
+            for stock_attempt in range(1, stock_attempts + 1):
+                stock_name, history_data = scraper.scrape_stock_data(stock_id)
+                if history_data:
+                    break
+                if stock_attempt < stock_attempts:
+                    retry_seconds = max(0, int(settings.get("browser_start_retry_seconds", 5)))
+                    print(
+                        f"  -> ⚠️ 第 {stock_attempt}/{stock_attempts} 次未取得資料；"
+                        f"{retry_seconds} 秒後重新處理 {stock_id}。"
+                    )
+                    if retry_seconds:
+                        time.sleep(retry_seconds)
+
+            if history_data:
                 if export_and_sync_data(stock_id, stock_name, history_data, session=session):
                     succeeded += 1
                 else:
                     failed += 1
             else:
-                print(f"  -> ⚠️ 警告: 未取得 {stock_id} 的有效歷史資料，略過儲存與同步。")
+                print(f"  -> ❌ {stock_id} 重試 {stock_attempts} 次後仍無有效資料，略過儲存與同步。")
                 failed += 1
-                
+
         except Exception as e:
             print(f"  -> ❌ 處理 {stock_id} 時發生最外層異常: {e}")
             failed += 1
-            
+
         if current_step < total_stocks:
             wait_time = random.randint(settings["minimum_wait_seconds"], settings["maximum_wait_seconds"])
             print(f"  -> ⏳ 隨機等待 {wait_time} 秒以防被伺服器阻擋...")
@@ -531,7 +596,7 @@ def main():
                 time.sleep(1)
             print("\r" + " " * 30 + "\r", end="", flush=True)
             print("-" * 40)
-            
+
     print(f"\n處理完成：成功 {succeeded} 檔，失敗 {failed} 檔。")
     print(f"目前網站：{DASHBOARD_URL}")
     if settings.get("open_dashboard_when_finished"):

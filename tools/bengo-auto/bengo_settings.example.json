@@ -2,5 +2,8 @@
   "headless": true,
   "minimum_wait_seconds": 40,
   "maximum_wait_seconds": 120,
+  "browser_start_attempts": 3,
+  "browser_start_retry_seconds": 5,
+  "stock_retry_attempts": 2,
   "open_dashboard_when_finished": false
 }

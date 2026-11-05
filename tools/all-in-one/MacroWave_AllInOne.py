@@ -110,6 +110,9 @@ def save_config(config, directory=None):
         "headless": True,
         "minimum_wait_seconds": config["minimum_wait_seconds"],
         "maximum_wait_seconds": config["maximum_wait_seconds"],
+        "browser_start_attempts": 3,
+        "browser_start_retry_seconds": 5,
+        "stock_retry_attempts": 2,
         "open_dashboard_when_finished": False,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
     (directory / "stock_tracker_settings.json").write_text(json.dumps({
@@ -192,7 +195,9 @@ def run_bengo_worker(config):
     module = load_worker_module("bengo_auto.py", "embedded_bengo")
     result = module.main()
     if result not in (None, 0):
-        raise RuntimeError(f"Bengo 工作結束碼：{result}")
+        if result == 1:
+            raise RuntimeError("Bengo 部分股票在自動重試後仍未完成；成功項目已保留，請查看上方個股紀錄")
+        raise RuntimeError(f"Bengo 無法執行（結束碼：{result}）")
 
 
 def _tree_rows(tree, keys):

@@ -12,6 +12,8 @@ Bengo 大戶籌碼自動抓取、JSON 備份與 590bbs 同步工具。
 4. 執行 `BengoAuto.exe`；Selenium Manager 會自動配對 ChromeDriver。
 5. 成功抓取的 JSON 會保存在 `Bengo_JSON_Backups`，同時上傳至 590bbs。
 
+Chrome 若暫時無法建立工作階段，程式會改用全新的獨立設定檔自動重試；單一股票仍未取得資料時，也會再完整重跑一次。
+
 程式同步端點：`https://590bbs.vercel.app/api/bengo/upload`
 
 如需顯示瀏覽器、縮短股票間隔或完成後開啟網站，將

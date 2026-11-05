@@ -32,6 +32,9 @@ class AllInOneTests(unittest.TestCase):
             self.assertTrue((base / app.CONFIG_NAME).exists())
             self.assertIn('configured', (base / 'macrowave_config.json').read_text(encoding='utf-8'))
             self.assertEqual((base / 'stock_id_settings.csv').read_text(encoding='utf-8'), '2330\n')
+            bengo_settings = (base / 'bengo_settings.json').read_text(encoding='utf-8')
+            self.assertIn('"browser_start_attempts": 3', bengo_settings)
+            self.assertIn('"stock_retry_attempts": 2', bengo_settings)
 
     def test_source_worker_command_uses_same_entrypoint(self):
         with patch.object(app.sys, 'frozen', False, create=True):

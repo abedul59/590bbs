@@ -1,7 +1,8 @@
 import importlib.util
 import pathlib
+import shutil
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 
 MODULE_PATH = pathlib.Path(__file__).with_name('bengo_auto.py')
@@ -60,6 +61,34 @@ class BengoAutoTests(unittest.TestCase):
     def test_invalid_stock_id_is_rejected(self):
         with self.assertRaises(ValueError):
             bengo_auto.validate_stock_id('../2330')
+
+    def test_chrome_start_retries_with_isolated_profiles(self):
+        settings = dict(bengo_auto.DEFAULT_SETTINGS)
+        settings.update({
+            'browser_start_attempts': 3,
+            'browser_start_retry_seconds': 0,
+        })
+        scraper = bengo_auto.BengoScraper(settings=settings, session=Mock())
+        driver = Mock()
+
+        with patch.object(
+            bengo_auto.webdriver,
+            'Chrome',
+            side_effect=[RuntimeError('chrome not reachable'), driver],
+        ) as chrome:
+            result, profile_dir = scraper.start_chrome()
+
+        try:
+            self.assertIs(result, driver)
+            self.assertEqual(chrome.call_count, 2)
+            first_options = chrome.call_args_list[0].kwargs['options']
+            second_options = chrome.call_args_list[1].kwargs['options']
+            first_profile = next(arg for arg in first_options.arguments if arg.startswith('--user-data-dir='))
+            second_profile = next(arg for arg in second_options.arguments if arg.startswith('--user-data-dir='))
+            self.assertNotEqual(first_profile, second_profile)
+            self.assertIn('--remote-debugging-pipe', second_options.arguments)
+        finally:
+            shutil.rmtree(profile_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':
