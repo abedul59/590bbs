@@ -31,11 +31,7 @@ export default defineEventHandler((event) => {
     void task
   }
 
-  setResponseStatus(event, 202)
   setResponseHeader(event, 'Cache-Control', 'no-store, max-age=0')
-  return {
-    success: true,
-    status: 'queued',
-    message: 'Render 喚醒要求已排入背景執行',
-  }
+  // 204 guarantees that cron-job.org receives zero response-body bytes.
+  return sendNoContent(event, 204)
 })

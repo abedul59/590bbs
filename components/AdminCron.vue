@@ -8,7 +8,8 @@
 
     <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl shadow-sm text-indigo-800 text-sm">
       <p class="font-bold mb-1">💡 運作原理：</p>
-      <p>cron-job.org 每小時呼叫下方的 Vercel 轉接網址。Vercel 立即回傳極小的排程確認，再於背景喚醒 Render，避免 Render 冷啟動畫面造成「Response data too big」。Render 恢復後會補處理最近 65 分鐘內尚未記錄的排程。</p>
+      <p>cron-job.org 每小時呼叫下方的 Vercel 轉接網址。Vercel 立即回傳 HTTP 204 空內容，再於背景喚醒 Render，避免 Render 冷啟動畫面造成「Response data too big」。Render 恢復後會補處理最近 65 分鐘內尚未記錄的排程。</p>
+      <p class="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-bold text-red-700">請勿把 cron-job.org 指向 <code>https://five90bbs-render-cron-api.onrender.com/run</code>；該網址會輸出大量執行結果。請將原工作的 URL 改成下方網址。</p>
       <div class="mt-3 flex flex-col gap-2 md:flex-row md:items-center">
         <code class="flex-1 overflow-x-auto rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-indigo-900">{{ cronBridgeUrl }}</code>
         <button type="button" class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700" @click="copyCronUrl">複製 cron-job.org 網址</button>
@@ -81,10 +82,9 @@ const testCronBridge = async () => {
   testMessage.value = ''
   testSucceeded.value = false
   try {
-    const result = await $fetch(cronBridgeUrl.value, { cache: 'no-store' })
-    if (!result?.success || result?.status !== 'queued') throw new Error('端點沒有回傳排程確認')
+    await $fetch(cronBridgeUrl.value, { cache: 'no-store' })
     testSucceeded.value = true
-    testMessage.value = '✅ Vercel 轉接正常，Render 喚醒要求已排入背景執行。'
+    testMessage.value = '✅ Vercel 轉接正常（HTTP 204 空內容），Render 喚醒要求已排入背景執行。'
   } catch (error) {
     testMessage.value = `❌ 喚醒測試失敗：${error?.data?.message || error?.message || '無法連線'}`
   } finally {

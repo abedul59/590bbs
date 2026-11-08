@@ -174,21 +174,23 @@
       </div>
 
       <ul class="space-y-3 max-h-[500px] overflow-y-auto pr-2">
-        <li v-for="item in filteredSortedPosts" :key="item.id" class="flex flex-col md:flex-row justify-between md:items-center bg-white p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow" :class="item.is_important ? 'border-red-300 bg-red-50' : 'border-gray-200'">
+        <li v-for="item in filteredSortedPosts" :key="item.id" class="flex flex-col md:flex-row justify-between md:items-center p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow" :class="isBulletinHidden(item) ? 'border-gray-300 bg-gray-100 opacity-70' : (item.is_important ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white')">
           <div class="flex flex-col mb-2 md:mb-0">
             <div class="flex items-center gap-2 flex-wrap">
               <span v-if="item.is_pinned" class="bg-yellow-400 text-white text-[10px] px-1.5 py-0.5 rounded">📌</span>
               <span v-if="item.is_important" class="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded">🔥</span>
+              <span v-if="isBulletinHidden(item)" class="bg-gray-600 text-white text-[10px] px-1.5 py-0.5 rounded">🙈 已從首頁隱藏</span>
               <span class="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap">{{ item.category }}</span>
               <span class="font-bold text-gray-800 text-base" :class="{'text-red-700': item.is_important}">{{ item.title }}</span>
             </div>
             <div class="flex flex-col text-xs text-gray-500 mt-1 gap-1">
               <span>🕒 {{ formatDate(item.created_at) }}</span>
               <span class="truncate max-w-xs md:max-w-md">🔗 {{ item.url }}</span>
-              <span v-if="item.links && item.links.length > 0" class="text-[10px] text-gray-400">+ 包含 {{ item.links.length }} 個額外網址</span>
+              <span v-if="getVisibleBulletinLinks(item).length > 0" class="text-[10px] text-gray-400">+ 包含 {{ getVisibleBulletinLinks(item).length }} 個額外網址</span>
             </div>
           </div>
           <div class="flex gap-2 self-end md:self-auto mt-2 md:mt-0">
+            <button @click="togglePostVisibility(item)" class="text-sm px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-200 transition-colors font-medium">{{ isBulletinHidden(item) ? '👁️ 恢復顯示' : '🙈 隱藏' }}</button>
             <button @click="startEdit(item)" :class="['text-sm px-3 py-1 rounded border transition-colors font-medium', themeObj.text, themeObj.bg.replace('bg-', 'border-'), themeObj.bg.replace('bg-', 'hover:bg-').replace('600', '50')]">編輯</button>
             <button @click="deletePost(item.id)" class="text-red-500 hover:bg-red-500 hover:text-white text-sm px-3 py-1 rounded border border-transparent hover:border-red-600 transition-colors font-medium">刪除</button>
           </div>
@@ -203,6 +205,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
+import { getVisibleBulletinLinks, isBulletinHidden, setBulletinHidden } from '@/utils/bulletinVisibility'
 
 const props = defineProps({
   adminPassword: { type: String, default: '' }
@@ -395,12 +398,19 @@ const deletePost = async (id) => {
   } 
 }
 
-const startEdit = (post) => { editingPost.value = JSON.parse(JSON.stringify({ ...post, links: post.links || [] })) }
+const startEdit = (post) => {
+  editingPost.value = JSON.parse(JSON.stringify({
+    ...post,
+    links: getVisibleBulletinLinks(post),
+    _was_hidden: isBulletinHidden(post)
+  }))
+}
 const cancelEdit = () => { editingPost.value = null }
 const saveEdit = async () => {
   if (!editingPost.value.title || !editingPost.value.url) return alert('標題與網址必填！')
-  const { id, title, description, url, category, is_important, is_pinned, links } = editingPost.value
-  await supabase.from('bulletins').update({ title, description, url, category, is_important, is_pinned, links }).eq('id', id)
+  const { id, title, description, url, category, is_important, is_pinned, links, _was_hidden } = editingPost.value
+  const storedLinks = setBulletinHidden({ links }, Boolean(_was_hidden))
+  await supabase.from('bulletins').update({ title, description, url, category, is_important, is_pinned, links: storedLinks }).eq('id', id)
   alert('更新成功！')
   activePublicTab.value = category
   editingPost.value = null 
@@ -412,6 +422,14 @@ const addLinkToObj = (obj) => {
   obj.links.push({ name: '', url: '' })
 }
 const removeLinkFromObj = (obj, index) => { obj.links.splice(index, 1) }
+
+const togglePostVisibility = async (post) => {
+  const hidden = !isBulletinHidden(post)
+  const links = setBulletinHidden(post, hidden)
+  const { error } = await supabase.from('bulletins').update({ links }).eq('id', post.id)
+  if (error) return alert(`更新顯示狀態失敗：${error.message}`)
+  post.links = links
+}
 
 // 生命週期載入
 onMounted(() => { 

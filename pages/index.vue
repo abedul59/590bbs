@@ -98,7 +98,7 @@
             前往主連結 🚀
           </a>
           <a 
-            v-for="(link, index) in item.links || []" 
+            v-for="(link, index) in getVisibleBulletinLinks(item)"
             :key="index"
             :href="link.url" 
             target="_blank"
@@ -164,6 +164,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
 import { getTodayPassword } from '@/utils/auth'
+import { getVisibleBulletinLinks, isBulletinHidden } from '@/utils/bulletinVisibility'
 
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
@@ -361,7 +362,7 @@ const formatDate = (dateString) => {
 
 const filteredBulletins = computed(() => {
   if (!bulletins.value) return []
-  let filtered = bulletins.value.filter(b => b.category === activeCategory.value)
+  let filtered = bulletins.value.filter(b => b.category === activeCategory.value && !isBulletinHidden(b))
   
   return filtered.sort((a, b) => {
     if (a.is_pinned !== b.is_pinned) {
