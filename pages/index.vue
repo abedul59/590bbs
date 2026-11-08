@@ -152,6 +152,7 @@
       <PublicQuickCreate
         v-if="quickCreateOpen"
         :categories="categories || []"
+        :admin-password="teacherSessionPassword"
         @close="quickCreateOpen = false"
         @post-created="handleQuickPostCreated"
       />
@@ -178,6 +179,7 @@ const teacherPassword = ref('')
 const teacherPasswordError = ref('')
 const teacherPasswordField = ref(null)
 const quickCreateOpen = ref(false)
+const teacherSessionPassword = ref('')
 let pendingTeacherAction = null
 
 const requestTeacherAuthorization = async (action) => {
@@ -211,6 +213,7 @@ const submitTeacherPassword = async () => {
   }
 
   teacherAuthorized.value = true
+  teacherSessionPassword.value = teacherPassword.value
   teacherPasswordDialogOpen.value = false
   teacherPassword.value = ''
   teacherPasswordError.value = ''

@@ -60,7 +60,7 @@
         <AdminCounseling v-if="activeTab === 'AdminCounseling'" />
         <AdminMaterial v-if="activeTab === 'AdminMaterial'" />
         <AdminPrivate v-if="activeTab === 'AdminPrivate'" />
-        <AdminPublic v-if="activeTab === 'AdminPublic'" />
+        <AdminPublic v-if="activeTab === 'AdminPublic'" :admin-password="inputPassword" />
         <AdminCheckins v-if="activeTab === 'AdminCheckins'" />
         <AdminCron v-if="activeTab === 'AdminCron'" />
       </div>

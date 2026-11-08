@@ -15,8 +15,14 @@
         </button>
       </div>
 
-      <p v-if="errorMessage" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">{{ errorMessage }}</p>
-      <p v-if="successMessage" class="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-700">{{ successMessage }}</p>
+      <p v-if="errorMessage" class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+        {{ errorMessage }}
+        <a v-if="createdPresentationUrl" :href="createdPresentationUrl" target="_blank" rel="noopener noreferrer" class="ml-1 underline">開啟已建立的簡報 ↗</a>
+      </p>
+      <p v-if="successMessage" class="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm font-bold text-green-700">
+        {{ successMessage }}
+        <a v-if="createdPresentationUrl" :href="createdPresentationUrl" target="_blank" rel="noopener noreferrer" class="ml-1 underline">立即編輯簡報 ↗</a>
+      </p>
 
       <form v-if="activeTab === 'bulletin'" class="space-y-4" @submit.prevent="addBulletin">
         <div class="grid gap-3 md:grid-cols-[1fr_2fr]">
@@ -44,8 +50,13 @@
         </label>
 
         <label class="block text-sm font-bold text-gray-700">
-          主要網址
-          <input v-model.trim="newPost.url" type="url" required class="mt-1 w-full rounded-lg border border-gray-300 p-2.5 font-normal outline-none focus:ring-2" :class="themeObj.ring" placeholder="https://...">
+          主要網址（不建立 Google 簡報時必填）
+          <input v-model.trim="newPost.url" type="url" :required="!createGoogleSlides" :disabled="createGoogleSlides" class="mt-1 w-full rounded-lg border border-gray-300 p-2.5 font-normal outline-none focus:ring-2 disabled:bg-gray-100 disabled:text-gray-400" :class="themeObj.ring" :placeholder="createGoogleSlides ? '發布後自動填入 Google 簡報網址' : 'https://...'">
+        </label>
+
+        <label class="flex cursor-pointer gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <input v-model="createGoogleSlides" type="checkbox" class="mt-0.5 h-4 w-4">
+          <span><strong>自動建立空白 Google 簡報</strong><br><span class="font-normal">發布時建立簡報，並設為「知道連結的任何人都可以編輯」。簡報網址會成為公告的主要網址。</span></span>
         </label>
 
         <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
@@ -93,7 +104,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { themeConfig } from '@/utils/theme'
 
 const props = defineProps({
-  categories: { type: Array, default: () => [] }
+  categories: { type: Array, default: () => [] },
+  adminPassword: { type: String, default: '' }
 })
 const emit = defineEmits(['close', 'post-created'])
 
@@ -104,6 +116,8 @@ const activeTab = ref('bulletin')
 const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const createdPresentationUrl = ref('')
+const createGoogleSlides = ref(true)
 
 const emptyPost = () => ({ title: '', description: '', url: '', category: props.categories[0]?.name || '', is_important: false, is_pinned: false, links: [] })
 const newPost = reactive(emptyPost())
@@ -116,29 +130,50 @@ watch(() => props.categories, (categories) => {
 const resetMessages = () => {
   errorMessage.value = ''
   successMessage.value = ''
+  createdPresentationUrl.value = ''
 }
 
 const addBulletin = async () => {
   resetMessages()
-  if (!newPost.category || !newPost.title || !newPost.url) {
-    errorMessage.value = '分類、標題與主要網址為必填。'
+  if (!newPost.category || !newPost.title || (!createGoogleSlides.value && !newPost.url)) {
+    errorMessage.value = '分類、標題為必填；若不建立 Google 簡報，主要網址也必填。'
     return
   }
   saving.value = true
+  let presentationUrl = ''
+  if (createGoogleSlides.value) {
+    try {
+      const presentation = await $fetch('/api/google-slides/create', {
+        method: 'POST',
+        headers: { 'x-admin-password': props.adminPassword },
+        body: { title: newPost.title }
+      })
+      presentationUrl = presentation.editUrl
+    } catch (error) {
+      saving.value = false
+      errorMessage.value = error?.data?.message || error?.data?.statusMessage || error?.statusMessage || 'Google 簡報建立失敗。'
+      return
+    }
+  }
   const payload = {
     ...newPost,
+    url: presentationUrl || newPost.url,
     links: newPost.links.filter(link => link.name || link.url)
   }
   const { data, error } = await supabase.from('bulletins').insert([payload]).select().single()
   saving.value = false
   if (error) {
-    errorMessage.value = `發布失敗：${error.message}`
+    errorMessage.value = presentationUrl
+      ? `簡報已建立，但公告發布失敗：${error.message}。請先開啟簡報保存網址。`
+      : `發布失敗：${error.message}`
+    createdPresentationUrl.value = presentationUrl
     return
   }
   emit('post-created', data)
   const category = newPost.category
   Object.assign(newPost, emptyPost(), { category })
-  successMessage.value = '公告已發布並顯示於首頁。'
+  createdPresentationUrl.value = presentationUrl
+  successMessage.value = presentationUrl ? '公告與空白 Google 簡報已建立。' : '公告已發布並顯示於首頁。'
 }
 
 const addTodo = async () => {

@@ -97,9 +97,14 @@
           </div>
           
           <div>
-            <label class="block text-sm text-gray-600 mb-1">主要網址 (必填)</label>
-            <input v-model="newPost.url" type="url" placeholder="https://..." :class="['border border-gray-300 p-2 w-full rounded focus:ring-2 focus:border-transparent focus:outline-none', themeObj.ring]">
+            <label class="block text-sm text-gray-600 mb-1">主要網址（不建立 Google 簡報時必填）</label>
+            <input v-model="newPost.url" type="url" :disabled="createGoogleSlides" :placeholder="createGoogleSlides ? '發布後自動填入 Google 簡報網址' : 'https://...'" :class="['border border-gray-300 p-2 w-full rounded focus:ring-2 focus:border-transparent focus:outline-none disabled:bg-gray-100 disabled:text-gray-400', themeObj.ring]">
           </div>
+
+          <label class="flex cursor-pointer gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <input v-model="createGoogleSlides" type="checkbox" class="mt-0.5 h-4 w-4">
+            <span><strong>自動建立空白 Google 簡報</strong><br><span class="font-normal">簡報會設成「知道連結的任何人都可以編輯」，並自動作為公告的主要網址。</span></span>
+          </label>
 
           <div class="bg-white p-3 rounded border border-gray-200">
             <div class="flex justify-between items-center mb-2">
@@ -113,7 +118,7 @@
             </div>
           </div>
 
-          <button @click="addPost" :class="[themeObj.bg, themeObj.hover, 'text-white px-6 py-2 rounded font-medium transition duration-300 shadow-sm w-full md:w-auto']">發布內容</button>
+          <button @click="addPost" :disabled="savingPost" :class="[themeObj.bg, themeObj.hover, 'text-white px-6 py-2 rounded font-medium transition duration-300 shadow-sm w-full md:w-auto disabled:opacity-60']">{{ savingPost ? '建立簡報並發布中…' : '發布內容' }}</button>
         </div>
       </div>
 
@@ -198,6 +203,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { themeConfig } from '@/utils/theme'
+
+const props = defineProps({
+  adminPassword: { type: String, default: '' }
+})
 
 const supabase = useSupabaseClient()
 const dayjs = useDayjs()
@@ -310,6 +319,8 @@ const postSort = ref('newest')
 const getEmptyPost = () => ({ title: '', description: '', url: '', category: '', is_important: false, is_pinned: false, links: [] })
 const newPost = ref(getEmptyPost()) 
 const editingPost = ref(null)
+const createGoogleSlides = ref(true)
+const savingPost = ref(false)
 
 const loadCats = async () => { 
   const { data } = await supabase.from('post_categories').select('*').order('id', { ascending: true })
@@ -344,11 +355,33 @@ const filteredSortedPosts = computed(() => {
 })
 
 const addPost = async () => {
-  if (!newPost.value.title || !newPost.value.url) return alert('標題與網址必填！')
+  if (!newPost.value.title || (!createGoogleSlides.value && !newPost.value.url)) return alert('標題必填；若不建立 Google 簡報，主要網址也必填！')
   if (!newPost.value.category) return alert('請選擇前台分類！')
+  savingPost.value = true
   const publishedCategory = newPost.value.category
-  await supabase.from('bulletins').insert([{ ...newPost.value }])
-  alert('發布成功！')
+  let presentationUrl = ''
+  try {
+    if (createGoogleSlides.value) {
+      const presentation = await $fetch('/api/google-slides/create', {
+        method: 'POST',
+        headers: { 'x-admin-password': props.adminPassword },
+        body: { title: newPost.value.title }
+      })
+      presentationUrl = presentation.editUrl
+    }
+    const payload = { ...newPost.value, url: presentationUrl || newPost.value.url }
+    const { error } = await supabase.from('bulletins').insert([payload])
+    if (error) throw error
+  } catch (error) {
+    savingPost.value = false
+    const message = error?.data?.message || error?.data?.statusMessage || error?.statusMessage || error?.message || '未知錯誤'
+    if (presentationUrl) window.open(presentationUrl, '_blank', 'noopener,noreferrer')
+    return alert(presentationUrl
+      ? `簡報已建立但公告發布失敗，已另開簡報避免網址遺失：${message}`
+      : `發布失敗：${message}`)
+  }
+  savingPost.value = false
+  alert(presentationUrl ? '公告與可共同編輯的 Google 簡報已建立！' : '發布成功！')
   activePublicTab.value = publishedCategory
   newPost.value = getEmptyPost()
   newPost.value.category = publishedCategory

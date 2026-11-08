@@ -11,6 +11,10 @@ export default defineNuxtConfig({
     // Server-only。NUXT_FRED_API_KEY 可在執行階段覆寫此值；舊有
     // FRED_API_KEY 仍由 server/utils/fred.ts 相容讀取。
     fredApiKey: process.env.FRED_API_KEY || process.env.FRED_KEY || '',
+    // Server-only Google OAuth credentials. Never expose these through public.
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
     public: {
       shjhsTelegramApiUrl: process.env.NUXT_PUBLIC_SHJHS_TELEGRAM_API_URL || 'https://five90bbs-telegram-shjhs-api.onrender.com',
       cronBridgeUrl: process.env.NUXT_PUBLIC_CRON_BRIDGE_URL || 'https://590bbs.vercel.app/api/cron-render',

@@ -8,6 +8,27 @@
 
 cron-job.org 應每小時呼叫 `https://590bbs.vercel.app/api/cron-render`。此 Vercel 端點立即回傳極小的 HTTP 202 排程確認，再使用背景任務喚醒 Render，避免免費 Render 冷啟動時的平台回應被 cron-job.org 判定為 `Response data too big`。不要再將 cron-job.org 直接指向 Render `/run`。若正式網域異動，可用 `NUXT_PUBLIC_CRON_BRIDGE_URL` 覆寫。
 
+## 公告自動建立 Google 簡報
+
+首頁快速新增與後台公告管理都可以在發布公告時，自動建立空白 Google 簡報。建立完成後，系統會將權限設為「知道連結的任何人可編輯」，並把簡報編輯網址存成公告的主要網址。
+
+先在 Google Cloud 專案啟用 **Google Slides API** 與 **Google Drive API**，建立 OAuth 2.0 用戶端，並以同一個 Google 帳號取得包含下列 scope 的長期 refresh token：
+
+```text
+https://www.googleapis.com/auth/presentations
+https://www.googleapis.com/auth/drive.file
+```
+
+接著在 Vercel Production、Preview 與 Development 環境設定以下三個 server-only 變數後重新部署：
+
+```text
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+GOOGLE_REFRESH_TOKEN
+```
+
+refresh token 所屬帳號會成為簡報擁有者。若使用 Google Workspace，管理員必須允許透過連結對外提供編輯權限；否則 Google Drive 會拒絕建立 `anyone / writer` 權限，系統也不會發布該公告。
+
 ## SHJHS 輔導紀錄整合
 
 後台的「SHJHS 輔導紀錄」分頁整合自 `abedul59/tlogs-shjhs`，包含文字紀錄、月曆查詢、編輯刪除、SHJHS Telegram 錄音保全，以及完整 JSON 備份匯入／匯出。
