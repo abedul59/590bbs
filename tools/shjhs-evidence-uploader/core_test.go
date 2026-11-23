@@ -48,7 +48,11 @@ func TestDetectRecordingTimeFallsBackToModificationTime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if source != "檔案修改時間" || !got.Equal(want) {
+	// Windows exposes a creation timestamp for the temporary file. Since the
+	// test moves LastWriteTime into the past, the detector correctly labels it
+	// as the earlier timestamp; Unix has no creation time and uses the shorter
+	// fallback label. The detected instant is the behaviour that matters here.
+	if (source != "檔案修改時間" && source != "檔案修改時間（較早）") || !got.Equal(want) {
 		t.Fatalf("got %s (%s), want %s", got, source, want)
 	}
 }
