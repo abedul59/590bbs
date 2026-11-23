@@ -1,0 +1,6 @@
+{
+  "api_url": "https://five90bbs-telegram-shjhs-api.onrender.com",
+  "supabase_url": "https://YOUR_PROJECT.supabase.co",
+  "supabase_key": "YOUR_SUPABASE_ANON_KEY",
+  "topic_id": 0
+}

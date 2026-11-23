@@ -20,6 +20,13 @@ logs
 __pycache__/
 *.py[cod]
 
+# SHJHS local uploader credentials and build outputs
+tools/shjhs-evidence-uploader/shjhs_uploader_config.json
+tools/shjhs-evidence-uploader/config.json
+tools/shjhs-evidence-uploader/session.json
+tools/shjhs-evidence-uploader/*.exe
+tools/shjhs-evidence-uploader/*.syso
+
 # Local env files
 .env
 .env.*

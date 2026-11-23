@@ -35,6 +35,8 @@ refresh token 所屬帳號會成為簡報擁有者。若使用 Google Workspace�
 
 後台的「SHJHS 輔導紀錄」分頁整合自 `abedul59/tlogs-shjhs`，包含文字紀錄、月曆查詢、編輯刪除、SHJHS Telegram 錄音保全，以及完整 JSON 備份匯入／匯出。
 
+`tools/shjhs-evidence-uploader` 提供獨立 Windows Go GUI。它可一次選取多個錄音檔，依檔名日期或檔案時間自動分流至各自的 `evidence_logs.log_date`，並包含 SHA-256 去重、串流上傳、逐檔進度及失敗重試。實際 Supabase 憑證與 Telegram session 不會包入 EXE；使用方式見該目錄的 README。
+
 首次啟用時，請在目標 Supabase SQL Editor 執行：
 
 ```text
